@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V38.5 (ULTIMATE STABLE) 🚀
-#  - MENU: REMASTERED & CLEAN
-#  - ENGINE: V33 STRICT (60s -> DELETE)
-#  - BOT: V38 ANTI-CRASH (AUTO-RESTART)
+#  SSH MANAGER V39 (FIXED BOT + GREEN MENU) 🚀
+#  - MENU: EXACT GREEN STYLE FROM SCREENSHOT
+#  - ENGINE: STRICT MONITOR (60s -> DELETE)
+#  - BOT: V39 ANTI-FREEZE & AUTO-RESTART
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -25,10 +25,9 @@ USER_DB="/etc/xpanel/users_db.txt"
 MONITOR_SCRIPT="/usr/local/bin/kp_monitor.sh"
 LOG_FILE="/var/log/kp_manager.log"
 BACKUP_DIR="/root/backups"
-BANNER_FILE="/etc/issue.net"
 MAX_LOGIN=1
 
-# --- COLORS ---
+# --- COLORS (Green Style) ---
 RED='\033[1;31m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
@@ -41,7 +40,7 @@ mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  🛡️ STRICT MONITOR ENGINE (HIDDEN POWER)
+#  🛡️ STRICT MONITOR ENGINE (BACKGROUND)
 # ==================================================
 pkill -f kp_monitor.sh
 cat > "$MONITOR_SCRIPT" << 'EOF'
@@ -52,12 +51,18 @@ MAX_LOGIN=1
 
 count_connections() {
     local u=$1
-    # Universal Detection (Root-owned + User-owned + Dropbear)
+    # 1. Root processes (Modern SSH)
     local ssh_new=$(ps -ef | grep "sshd: $u " | grep -v grep | wc -l)
+    # 2. User processes (Old SSH)
     local ssh_old=$(ps -u "$u" 2>/dev/null | grep "sshd" | wc -l)
+    # 3. Dropbear
     local drop=$(ps -u "$u" 2>/dev/null | grep "dropbear" | wc -l)
     
-    if [[ "$ssh_new" -gt "$ssh_old" ]]; then echo $((ssh_new + drop)); else echo $((ssh_old + drop)); fi
+    if [[ "$ssh_new" -gt "$ssh_old" ]]; then 
+        echo $((ssh_new + drop))
+    else 
+        echo $((ssh_old + drop))
+    fi
 }
 
 while true; do
@@ -66,7 +71,7 @@ while true; do
         while IFS='|' read -r user date time note; do
             [[ -z "$user" || -z "$date" ]] && continue
             
-            # 1. Expiry Check
+            # Expiry
             if [[ "$date" != "NEVER" ]]; then
                 [[ -z "$time" ]] && time="23:59"
                 EXP_TS=$(date -d "$date $time" +%s 2>/dev/null)
@@ -79,19 +84,14 @@ while true; do
                 fi
             fi
 
-            # 2. Multi-Login Check (STRICT)
+            # Multi-Login (STRICT DELETE)
             if [[ "$user" == "root" ]]; then continue; fi
             COUNT=$(count_connections "$user")
             
             if [[ "$COUNT" -gt "$MAX_LOGIN" ]]; then
-                # Wait 60 Seconds
                 sleep 60
-                
-                # Re-Check
                 COUNT_AGAIN=$(count_connections "$user")
-                
                 if [[ "$COUNT_AGAIN" -gt "$MAX_LOGIN" ]]; then
-                    # === PERMANENT DELETE ===
                     pkill -KILL -u "$user"
                     ps -ef | grep "sshd: $user " | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null
                     userdel -f -r "$user" 2>/dev/null
@@ -132,7 +132,7 @@ fun_create() {
     
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V28" >> "$USER_DB"
+    echo "$u|$d|$t|V39" >> "$USER_DB"
     echo -e "${GREEN}✔ ACCOUNT CREATED!${NC}"; pause
 }
 
@@ -234,11 +234,11 @@ fun_save() {
     echo -e "${GREEN}✅ DATA BACKED UP!${NC}"; echo -e "PATH: $BACKUP_DIR/$B_NAME"; pause
 }
 
-# --- 🤖 BOT INSTALLER (V38 ANTI-CRASH) ---
+# --- 🤖 BOT INSTALLER (V39 ANTI-FREEZE FIX) ---
 fun_install_bot() {
     clear
     echo -e "${BLUE}==================================================${NC}"
-    echo -e "${YELLOW}           INSTALLING STABLE BOT V38...           ${NC}"
+    echo -e "${YELLOW}           INSTALLING FIXED BOT V39...            ${NC}"
     echo -e "${BLUE}==================================================${NC}"
     
     # 1. Install Dependencies
@@ -288,16 +288,25 @@ def start(update: Update, context: CallbackContext):
               [InlineKeyboardButton("🗑️ REMOVE ACCOUNT", callback_data='del'), InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock')],
               [InlineKeyboardButton("📋 LIST ACCOUNTS", callback_data='list'), InlineKeyboardButton("🟢 ONLINE USERS", callback_data='onl')],
               [InlineKeyboardButton("💾 BACKUP DATA", callback_data='bak'), InlineKeyboardButton("⚙️ SETTINGS", callback_data='set')]]
-        update.message.reply_text("*🤖 SSH MANAGER BOT V38*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
+        update.message.reply_text("*🤖 SSH MANAGER BOT V39*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
     except: pass
 
 def btn(update: Update, context: CallbackContext):
     try:
-        q = update.callback_query; q.answer(); data = q.data
+        q = update.callback_query
+        # FIX: Respond immediately to prevent freezing
+        try: q.answer()
+        except: pass 
+        
+        data = q.data
         if data == 'add': context.user_data['act']='a1'; q.edit_message_text("ENTER USERNAME:")
         elif data == 'ren': context.user_data['act']='r1'; q.edit_message_text("ENTER USERNAME:")
         elif data == 'del': context.user_data['act']='d1'; q.edit_message_text("ENTER USERNAME:")
         elif data == 'lock': context.user_data['act']='l1'; q.edit_message_text("ENTER USERNAME:")
+        
+        elif data == 'a_unlim': create_user(update, context, "NEVER", "00:00")
+        elif data == 'a_date': context.user_data['act']='a_date_input'; q.edit_message_text("ENTER DATE (YYYY-MM-DD):")
+        
         elif data == 'list':
             msg = "USER | EXPIRY\n------------------\n"
             if os.path.exists(DB_FILE):
@@ -323,6 +332,7 @@ def btn(update: Update, context: CallbackContext):
             q.edit_message_text("⚙️ SETTINGS:", reply_markup=InlineKeyboardMarkup(kb))
         elif data == 'tz': run_cmd("timedatectl set-timezone Africa/Tunis"); q.edit_message_text("🌍 TIMEZONE SET.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         elif data == 'back': start(update, context)
+        
         elif data.startswith('LK_'): u = data.split('_')[1]; run_cmd(f"usermod -L {u}"); run_cmd(f"pkill -KILL -u {u}"); q.edit_message_text(f"⛔ LOCKED {u}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         elif data.startswith('UL_'): u = data.split('_')[1]; run_cmd(f"usermod -U {u}"); q.edit_message_text(f"🔓 UNLOCKED {u}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         elif data.startswith('DEL_YES_'):
@@ -336,6 +346,8 @@ def btn(update: Update, context: CallbackContext):
 def create_user(update, context, d, t):
     try:
         u = context.user_data.get('nu'); p = context.user_data.get('np')
+        if not u or not p: return 
+        
         if run_cmd(f"useradd -M -s /bin/false {u}"):
             run_cmd(f"echo '{u}:{p}' | chpasswd")
             with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{t}|Bot\n")
@@ -353,10 +365,12 @@ def txt(update: Update, context: CallbackContext):
     try:
         if update.effective_user.id != ADMIN_ID: return
         msg = update.message.text; act = context.user_data.get('act')
+        
         if act == 'a1': context.user_data.update({'nu': msg, 'act': 'a2'}); update.message.reply_text("ENTER PASSWORD :")
         elif act == 'a2': context.user_data.update({'np': msg}); kb = [[InlineKeyboardButton("♾️ UNLIMITED", callback_data='a_unlim')], [InlineKeyboardButton("📅 CUSTOM", callback_data='a_date')]]; update.message.reply_text("EXPIRY:", reply_markup=InlineKeyboardMarkup(kb))
         elif act == 'a_date_input': context.user_data.update({'nd': msg, 'act': 'a_time_input'}); update.message.reply_text("TIME (HH:MM):")
         elif act == 'a_time_input': t = msg if msg else "23:59"; d = context.user_data['nd']; create_user(update, context, d, t)
+        
         elif act == 'r1': context.user_data.update({'ru': msg, 'act': 'r2'}); update.message.reply_text("NEW DATE:")
         elif act == 'r2': context.user_data.update({'rd': msg, 'act': 'r3'}); update.message.reply_text("TIME:")
         elif act == 'r3':
@@ -365,11 +379,13 @@ def txt(update: Update, context: CallbackContext):
             with open(DB_FILE, 'w') as f: f.writelines(lines)
             with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{t}|Renew\n"); run_cmd(f"usermod -U {u}")
             update.message.reply_text("✅ RENEWED!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]])); context.user_data['act'] = None
+        
         elif act == 'd1': u = msg; kb = [[InlineKeyboardButton("YES", callback_data=f'DEL_YES_{u}'), InlineKeyboardButton("NO", callback_data='DEL_NO')]]; update.message.reply_text(f"DELETE {u}?", reply_markup=InlineKeyboardMarkup(kb)); context.user_data['act'] = None
         elif act == 'l1': u = msg; kb = [[InlineKeyboardButton("LOCK", callback_data=f'LK_{u}'), InlineKeyboardButton("UNLOCK", callback_data=f'UL_{u}')]]; update.message.reply_text(f"ACTION FOR {u}:", reply_markup=InlineKeyboardMarkup(kb)); context.user_data['act'] = None
     except: pass
 
 def main():
+    # Fix Timeouts and Freezes
     req = Request(connect_timeout=10.0, read_timeout=10.0)
     up = Updater(TOKEN, request_kwargs={'read_timeout': 10, 'connect_timeout': 10}, use_context=True)
     dp = up.dispatcher
@@ -407,11 +423,11 @@ fun_settings() {
     echo -e "${BLUE}==================================================${NC}"
     echo -e "${YELLOW}                  [08] SETTINGS                   ${NC}"
     echo -e "${BLUE}==================================================${NC}"
-    echo " [1] FIX TIMEZONE (TUNISIA)"
-    echo " [2] RESTART MONITOR SERVICE"
-    echo " [3] RESTART SSH SERVICE"
-    echo " [4] VIEW LOGS"
-    echo " [5] 🤖 INSTALL / UPDATE BOT"
+    echo -e " [1] FIX TIMEZONE"
+    echo -e " [2] RESTART MONITOR"
+    echo -e " [3] RESTART SSH"
+    echo -e " [4] VIEW LOGS"
+    echo -e " [5] 🤖 INSTALL / UPDATE BOT"
     echo ""
     read -p " SELECT OPTION: " s
     
@@ -425,7 +441,7 @@ fun_settings() {
     pause
 }
 
-# --- MAIN MENU (EXACT REPLICA) ---
+# --- MAIN MENU (GREEN STYLE) ---
 while true; do
     clear
     # Monitor Check
