@@ -1,8 +1,8 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V28.1 - STABLE FIX 🔧
-#  MULTILOGIN CHECK REMOVED
-#  ADD USER WITH SIMPLE EXPIRY OPTION
+#  SSH MANAGER V28.3
+#  - MENU DESIGN: UPDATED
+#  - FEATURES: 60s DELAY + EXPIRY CHOICE
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -27,20 +27,23 @@ mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  MONITOR ENGINE (EXPIRY ONLY)
+#  MONITOR ENGINE (BACKGROUND SERVICE)
 # ==================================================
 pkill -f kp_monitor.sh
 cat > "$MONITOR_SCRIPT" << 'EOF'
 #!/bin/bash
 DB="/etc/xpanel/users_db.txt"
 LOG="/var/log/kp_manager.log"
+MAX_LOGIN=1
 
 while true; do
     NOW=$(date +%s)
     if [[ -f "$DB" ]]; then
         while IFS='|' read -r user date time note; do
             [[ -z "$user" || -z "$date" ]] && continue
-            if [[ "$date" != "never" ]]; then
+            
+            # 1. CHECK EXPIRY (IGNORE "NEVER")
+            if [[ "$date" != "NEVER" ]]; then
                 [[ -z "$time" ]] && time="23:59"
                 EXP_TS=$(date -d "$date $time" +%s 2>/dev/null)
                 if [[ -n "$EXP_TS" && "$NOW" -ge "$EXP_TS" ]]; then
@@ -50,6 +53,26 @@ while true; do
                     sed -i "/^$user|/d" "$DB"
                     echo "$(date) | EXPIRED | REMOVED $user" >> "$LOG"
                     continue
+                fi
+            fi
+
+            # 2. ANTI-MULTILOGIN (WITH 60s DELAY)
+            if [[ "$user" == "root" ]]; then continue; fi
+            COUNT=$(ps -u "$user" -o stat,comm 2>/dev/null | grep -v "Z" | grep "sshd" | wc -l)
+            
+            if [[ "$COUNT" -gt "$MAX_LOGIN" ]]; then
+                # WAIT 60 SECONDS (GRACE PERIOD)
+                sleep 60
+                
+                # CHECK AGAIN
+                COUNT_AGAIN=$(ps -u "$user" -o stat,comm 2>/dev/null | grep -v "Z" | grep "sshd" | wc -l)
+                
+                if [[ "$COUNT_AGAIN" -gt "$MAX_LOGIN" ]]; then
+                    pkill -KILL -u "$user"
+                    killall -u "$user" 2>/dev/null
+                    userdel -f -r "$user" 2>/dev/null
+                    sed -i "/^$user|/d" "$DB"
+                    echo "$(date) | CHEATER | REMOVED $user" >> "$LOG"
                 fi
             fi
         done < "$DB"
@@ -63,108 +86,146 @@ if ! pgrep -f "kp_monitor.sh" > /dev/null; then nohup "$MONITOR_SCRIPT" >/dev/nu
 # ==================================================
 #  FUNCTIONS
 # ==================================================
-pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 
-# [01] ADD USER
+pause() {
+    echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"
+    read
+}
+
+# [01] ADD ACCOUNT
 fun_create() {
     clear
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${YELLOW}                 [01] ADD USER                    ${NC}"
-    echo -e "${BLUE}==================================================${NC}"
+    echo -e "${BLUE}========================${NC}"
+    echo -e "${YELLOW}   [01] ADD ACCOUNT     ${NC}"
+    echo -e "${BLUE}========================${NC}"
     echo ""
     
-    read -p " ENTER USERNAME :" u
-    if id "$u" &>/dev/null; then echo -e "${RED}❌ USER ALREADY EXISTS!${NC}"; pause; return; fi
-    read -p " ENTER PASSWORD :" p
-    
-    read -p "Set expiry? (yes/no): " choice
-    if [[ "$choice" == "yes" || "$choice" == "y" ]]; then
-        read -p " ENTER DATE (YYYY-MM-DD): " d
-        if ! date -d "$d" >/dev/null 2>&1; then echo "❌ INVALID DATE!"; pause; return; fi
-        read -p " ENTER TIME (HH:MM) [default 23:59]: " t
-        [[ -z "$t" ]] && t="23:59"
-    else
-        d="never"
-        t="23:59"
+    # 1. USERNAME
+    read -p " ENTER USERNAME : " u
+    if id "$u" &>/dev/null; then 
+        echo -e "${RED}❌ ERROR: ACCOUNT ALREADY EXISTS!${NC}"
+        pause
+        return
     fi
     
+    # 2. PASSWORD
+    read -p " ENTER PASSWORD : " p
+    
+    echo -e "${CYAN}------------------------${NC}"
+    
+    # 3. EXPIRY CHOICE
+    read -p " SET EXPIRY DATE? (Y/N) : " choice
+    
+    if [[ "$choice" == "Y" || "$choice" == "y" ]]; then
+        read -p " ENTER DATE (YYYY-MM-DD): " d
+        if ! date -d "$d" >/dev/null 2>&1; then 
+            echo -e "${RED}❌ ERROR: INVALID DATE FORMAT!${NC}"
+            pause
+            return
+        fi
+        
+        read -p " ENTER TIME (HH:MM)     : " t
+        [[ -z "$t" ]] && t="23:59"
+    else
+        d="NEVER"
+        t="00:00"
+        echo -e "${GREEN}ℹ️  SET TO UNLIMITED (NEVER EXPIRES)${NC}"
+    fi
+    
+    # CREATE USER
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
     echo "$u|$d|$t|V28" >> "$USER_DB"
     
-    echo -e "${GREEN}✔ USER CREATED SUCCESSFULLY!${NC}"
-    echo -e "USER: $u | EXP: $d @ $t"
+    echo ""
+    echo -e "${BLUE}========================${NC}"
+    echo -e "${GREEN}✔ ACCOUNT CREATED!${NC}"
+    echo -e " USERNAME : ${YELLOW}$u${NC}"
+    echo -e " PASSWORD : ${YELLOW}$p${NC}"
+    if [[ "$d" == "NEVER" ]]; then
+        echo -e " EXPIRES  : ${GREEN}UNLIMITED ♾️${NC}"
+    else
+        echo -e " EXPIRES  : ${RED}$d @ $t${NC}"
+    fi
+    echo -e "${BLUE}========================${NC}"
     pause
 }
 
-# [02] RENEW USER
+# [02] RENEW ACCOUNT
 fun_renew() {
     clear
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${YELLOW}                [02] RENEW USER                   ${NC}"
-    echo -e "${BLUE}==================================================${NC}"
+    echo -e "${BLUE}========================${NC}"
+    echo -e "${YELLOW}  [02] RENEW ACCOUNT    ${NC}"
+    echo -e "${BLUE}========================${NC}"
     echo ""
     
-    read -p " ENTER USERNAME  :" u
-    if ! grep -q "^$u|" "$USER_DB"; then echo -e "${RED}❌ USER NOT FOUND!${NC}"; pause; return; fi
-    read -p " ENTER DATE      :" d
+    read -p " ENTER USERNAME  : " u
+    if ! grep -q "^$u|" "$USER_DB"; then echo -e "${RED}❌ ACCOUNT NOT FOUND!${NC}"; pause; return; fi
+    
+    read -p " ENTER NEW DATE (YYYY-MM-DD) : " d
     if ! date -d "$d" >/dev/null 2>&1; then echo -e "${RED}❌ INVALID DATE!${NC}"; pause; return; fi
-    read -p " ENTER TIME      :" t
+
+    read -p " ENTER NEW TIME (HH:MM)      : " t
     [[ -z "$t" ]] && t="23:59"
     
     sed -i "/^$u|/d" "$USER_DB"
     echo "$u|$d|$t|Renew" >> "$USER_DB"
     usermod -U "$u"
     
-    echo -e "${GREEN}✔ RENEWED SUCCESSFULLY!${NC}"
+    echo -e "${GREEN}✔ ACCOUNT RENEWED SUCCESSFULLY!${NC}"
     pause
 }
 
-# [03] REMOVE USER
+# [03] REMOVE ACCOUNT
 fun_remove() {
     clear
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${RED}                [03] REMOVE USER                  ${NC}"
-    echo -e "${BLUE}==================================================${NC}"
+    echo -e "${BLUE}========================${NC}"
+    echo -e "${RED}  [03] REMOVE ACCOUNT   ${NC}"
+    echo -e "${BLUE}========================${NC}"
     echo ""
     read -p " ENTER USERNAME TO REMOVE: " u
-    read -p "ARE YOU SURE YOU WANT TO REMOVE ($u)? (y/n): " confirm
-    if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
+    
+    echo -e "${RED}ARE YOU SURE YOU WANT TO DELETE ($u)? (Y/N)${NC}"
+    read -p "> " confirm
+    if [[ "$confirm" == "Y" || "$confirm" == "y" ]]; then
         pkill -u "$u"; userdel -f -r "$u"
         sed -i "/^$u|/d" "$USER_DB"
-        echo -e "${RED}🗑️ USER REMOVED SUCCESSFULLY.${NC}"
+        echo -e "${RED}🗑️ ACCOUNT DELETED.${NC}"
     else
-        echo "CANCELLED."
+        echo "OPERATION CANCELLED."
     fi
     pause
 }
 
-# [04] LOCK OR UNLOCK
+# [04] LOCK ACCOUNT
 fun_lock() {
     clear
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${YELLOW}             [04] LOCK OR UNLOCK USER             ${NC}"
-    echo -e "${BLUE}==================================================${NC}"
+    echo -e "${BLUE}========================${NC}"
+    echo -e "${YELLOW}   [04] LOCK ACCOUNT    ${NC}"
+    echo -e "${BLUE}========================${NC}"
+    echo ""
     read -p " ENTER USERNAME: " u
-    echo " [1] LOCK ⛔ (BAN USER)"
-    echo " [2] UNLOCK 🔓 (UNBAN USER)"
+    echo ""
+    echo " [1] LOCK ⛔ (BAN)"
+    echo " [2] UNLOCK 🔓 (UNBAN)"
+    echo ""
     read -p " SELECT ACTION: " act
     
     if [[ "$act" == "1" ]]; then 
         usermod -L "$u"; pkill -KILL -u "$u"
-        echo -e "${RED}⛔ USER $u IS NOW LOCKED.${NC}"
+        echo -e "${RED}⛔ ACCOUNT $u LOCKED.${NC}"
     elif [[ "$act" == "2" ]]; then 
         usermod -U "$u"
-        echo -e "${GREEN}🔓 USER $u IS NOW UNLOCKED.${NC}"
+        echo -e "${GREEN}🔓 ACCOUNT $u UNLOCKED.${NC}"
     fi
     pause
 }
 
-# [05] SHOW ALL USERS
+# [05] LIST ACCOUNTS
 fun_list() {
     clear
     echo -e "${BLUE}==================================================${NC}"
-    echo -e "${YELLOW}              [05] SHOW ALL USERS                 ${NC}"
+    echo -e "${YELLOW}               [05] LIST ACCOUNTS                 ${NC}"
     echo -e "${BLUE}==================================================${NC}"
     echo -e "${WHITE}USER           | DATE       | TIME  | STATUS${NC}"
     echo -e "${CYAN}--------------------------------------------------${NC}"
@@ -180,11 +241,11 @@ fun_list() {
     pause
 }
 
-# [06] CHECK ONLINE
+# [06] CHECK STATUS (ONLINE USERS)
 fun_online() {
     clear
     echo -e "${BLUE}==================================================${NC}"
-    echo -e "${GREEN}             [06] CHECK WHO IS ONLINE             ${NC}"
+    echo -e "${GREEN}               [06] CHECK STATUS                  ${NC}"
     echo -e "${BLUE}==================================================${NC}"
     echo -e "${WHITE}USER           | STATUS${NC}"
     echo -e "${CYAN}--------------------------------------------------${NC}"
@@ -199,15 +260,27 @@ fun_online() {
     done < "$USER_DB"
     
     if [[ $count -eq 0 ]]; then echo "NO USERS ONLINE."; fi
+    
+    # Also show Monitor Status here
+    echo -e "${CYAN}--------------------------------------------------${NC}"
+    if pgrep -f "kp_monitor.sh" > /dev/null; then
+        echo -e " MONITOR ENGINE: ${GREEN}RUNNING 🟢${NC}"
+    else
+        echo -e " MONITOR ENGINE: ${RED}STOPPED 🔴${NC}"
+    fi
     pause
 }
 
-# [07] SAVE DATA
+# [07] BACKUP DATA
 fun_save() {
     clear
+    echo -e "${BLUE}========================${NC}"
+    echo -e "${YELLOW}    [07] BACKUP DATA    ${NC}"
+    echo -e "${BLUE}========================${NC}"
     B_NAME="BACKUP_$(date '+%Y%m%d').txt"
     cp "$USER_DB" "$BACKUP_DIR/$B_NAME"
-    echo -e "${GREEN}✅ DATA SAVED SUCCESSFULLY!${NC}"
+    echo ""
+    echo -e "${GREEN}✅ DATA BACKED UP!${NC}"
     echo -e "PATH: $BACKUP_DIR/$B_NAME"
     pause
 }
@@ -215,17 +288,21 @@ fun_save() {
 # [08] SETTINGS
 fun_settings() {
     clear
+    echo -e "${BLUE}========================${NC}"
+    echo -e "${YELLOW}      [08] SETTINGS     ${NC}"
+    echo -e "${BLUE}========================${NC}"
     echo " [1] FIX TIMEZONE (TUNISIA)"
     echo " [2] RESTART MONITOR SERVICE"
     echo " [3] SET SERVER BANNER"
     echo " [4] VIEW LOGS"
+    echo ""
     read -p " SELECT OPTION: " s
     
     case "$s" in
-        1) timedatectl set-timezone Africa/Tunis ;;
-        2) pkill -f kp_monitor.sh; nohup "$MONITOR_SCRIPT" >/dev/null 2>&1 & ;;
-        3) read -p "BANNER TEXT: " b; echo "$b" > "$BANNER_FILE"; service ssh restart ;;
-        4) tail -n 10 "$LOG_FILE" ;;
+        1) timedatectl set-timezone Africa/Tunis; echo -e "${GREEN}DONE.${NC}";;
+        2) pkill -f kp_monitor.sh; nohup "$MONITOR_SCRIPT" >/dev/null 2>&1 & echo -e "${GREEN}SERVICE RESTARTED.${NC}";;
+        3) read -p "BANNER TEXT: " b; echo "$b" > "$BANNER_FILE"; service ssh restart; echo -e "${GREEN}UPDATED.${NC}";;
+        4) echo ""; tail -n 10 "$LOG_FILE";;
     esac
     pause
 }
@@ -233,26 +310,27 @@ fun_settings() {
 # --- MAIN MENU ---
 while true; do
     clear
-    if pgrep -f "kp_monitor.sh" > /dev/null; then
-        MON_MSG="${GREEN}ON${NC}"
-    else
-        MON_MSG="${RED}OFF${NC}"
+    
+    # Auto-restart monitor
+    if ! pgrep -f "kp_monitor.sh" > /dev/null; then
         nohup "$MONITOR_SCRIPT" >/dev/null 2>&1 &
     fi
 
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${WHITE}                   SSH MANAGER                    ${NC}"
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e " [01] ADD USER"
-    echo -e " [02] RENEW USER"
-    echo -e " [03] REMOVE USER"
-    echo -e " [04] LOCK OR UNLOCK USER"
-    echo -e " [05] SHOW ALL USERS"
-    echo -e " [06] CHECK WHO IS ONLINE"
-    echo -e " [07] SAVE DATA"
+    echo -e "${BLUE}========================${NC}"
+    echo -e "${WHITE}       SSH MANAGER      ${NC}"
+    echo -e "${BLUE}========================${NC}"
+    echo ""
+    echo -e " [01] ADD ACCOUNT"
+    echo -e " [02] RENEW ACCOUNT"
+    echo -e " [03] REMOVE ACCOUNT"
+    echo -e " [04] LOCK ACCOUNT"
+    echo -e " [05] LIST ACCOUNTS"
+    echo -e " [06] CHECK STATUS"
+    echo -e " [07] BACKUP DATA"
     echo -e " [08] SETTINGS"
     echo -e " [00] EXIT"
-    echo -e " MONITOR: $MON_MSG"
+    echo ""
+    echo -e "${BLUE}========================${NC}"
     read -p " SELECT OPTION: " opt
     
     case "$opt" in
