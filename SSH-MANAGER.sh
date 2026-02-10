@@ -1,11 +1,25 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V28.3
-#  - MENU DESIGN: UPDATED
+#  SSH MANAGER V28.4 - UNIVERSAL EDITION 🌍
+#  - COMPATIBLE: UBUNTU / DEBIAN / CENTOS / ALMA
 #  - FEATURES: 60s DELAY + EXPIRY CHOICE
+#  - MONITOR: DETECTS OPENSSH + DROPBEAR
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# --- DETECT OS & SSH SERVICE ---
+if [[ -f /etc/debian_version ]]; then
+    OS="debian"
+    SSH_SERVICE="ssh"
+elif [[ -f /etc/redhat-release ]]; then
+    OS="centos"
+    SSH_SERVICE="sshd"
+else
+    # Fallback
+    OS="unknown"
+    SSH_SERVICE="sshd"
+fi
 
 # --- COLORS ---
 RED='\033[1;31m'
@@ -23,11 +37,12 @@ LOG_FILE="/var/log/kp_manager.log"
 BANNER_FILE="/etc/issue.net"
 BACKUP_DIR="/root/backups"
 
+# Ensure Permissions & Files
 mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  MONITOR ENGINE (BACKGROUND SERVICE)
+#  MONITOR ENGINE (UNIVERSAL & ROBUST)
 # ==================================================
 pkill -f kp_monitor.sh
 cat > "$MONITOR_SCRIPT" << 'EOF'
@@ -35,6 +50,14 @@ cat > "$MONITOR_SCRIPT" << 'EOF'
 DB="/etc/xpanel/users_db.txt"
 LOG="/var/log/kp_manager.log"
 MAX_LOGIN=1
+
+# Function to count connections (Works for OpenSSH & Dropbear)
+count_connections() {
+    local u=$1
+    # Search for sshd or dropbear processes owned by user
+    local c=$(ps -u "$u" -o comm= 2>/dev/null | grep -E "sshd|dropbear" | wc -l)
+    echo "$c"
+}
 
 while true; do
     NOW=$(date +%s)
@@ -58,21 +81,24 @@ while true; do
 
             # 2. ANTI-MULTILOGIN (WITH 60s DELAY)
             if [[ "$user" == "root" ]]; then continue; fi
-            COUNT=$(ps -u "$user" -o stat,comm 2>/dev/null | grep -v "Z" | grep "sshd" | wc -l)
+            
+            # First Check
+            COUNT=$(count_connections "$user")
             
             if [[ "$COUNT" -gt "$MAX_LOGIN" ]]; then
                 # WAIT 60 SECONDS (GRACE PERIOD)
                 sleep 60
                 
-                # CHECK AGAIN
-                COUNT_AGAIN=$(ps -u "$user" -o stat,comm 2>/dev/null | grep -v "Z" | grep "sshd" | wc -l)
+                # Check Again
+                COUNT_AGAIN=$(count_connections "$user")
                 
                 if [[ "$COUNT_AGAIN" -gt "$MAX_LOGIN" ]]; then
                     pkill -KILL -u "$user"
                     killall -u "$user" 2>/dev/null
+                    # REMOVE USER (STRICT MODE)
                     userdel -f -r "$user" 2>/dev/null
                     sed -i "/^$user|/d" "$DB"
-                    echo "$(date) | CHEATER | REMOVED $user" >> "$LOG"
+                    echo "$(date) | CHEATER | REMOVED $user (Count: $COUNT_AGAIN)" >> "$LOG"
                 fi
             fi
         done < "$DB"
@@ -234,7 +260,8 @@ fun_list() {
         [[ -z "$u" ]] && continue
         if ! id "$u" &>/dev/null; then st="${RED}OFFLINE${NC}"
         elif passwd -S "$u" 2>/dev/null | grep -q "L"; then st="${RED}LOCKED ⛔${NC}"
-        elif ps -u "$u" -o stat,comm 2>/dev/null | grep -v "Z" | grep -q "sshd"; then st="${GREEN}ONLINE 🟢${NC}"
+        # Universal Check for SSHD + Dropbear
+        elif ps -u "$u" -o comm= 2>/dev/null | grep -E -q "sshd|dropbear"; then st="${GREEN}ONLINE 🟢${NC}"
         else st="${RED}OFFLINE${NC}"; fi
         printf "${YELLOW}%-14s ${NC}| %-10s | %-5s | %b\n" "$u" "$d" "$t" "$st"
     done < "$USER_DB"
@@ -253,7 +280,8 @@ fun_online() {
     count=0
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
-        if ps -u "$u" -o stat,comm 2>/dev/null | grep -v "Z" | grep -q "sshd"; then
+        # Universal Check for SSHD + Dropbear
+        if ps -u "$u" -o comm= 2>/dev/null | grep -E -q "sshd|dropbear"; then
             printf "${YELLOW}%-14s ${NC}| ${GREEN}ONLINE 🟢${NC}\n" "$u"
             ((count++))
         fi
@@ -293,15 +321,22 @@ fun_settings() {
     echo -e "${BLUE}========================${NC}"
     echo " [1] FIX TIMEZONE (TUNISIA)"
     echo " [2] RESTART MONITOR SERVICE"
-    echo " [3] SET SERVER BANNER"
+    echo " [3] RESTART SSH SERVICE ($SSH_SERVICE)"
     echo " [4] VIEW LOGS"
     echo ""
     read -p " SELECT OPTION: " s
     
     case "$s" in
         1) timedatectl set-timezone Africa/Tunis; echo -e "${GREEN}DONE.${NC}";;
-        2) pkill -f kp_monitor.sh; nohup "$MONITOR_SCRIPT" >/dev/null 2>&1 & echo -e "${GREEN}SERVICE RESTARTED.${NC}";;
-        3) read -p "BANNER TEXT: " b; echo "$b" > "$BANNER_FILE"; service ssh restart; echo -e "${GREEN}UPDATED.${NC}";;
+        2) pkill -f kp_monitor.sh; nohup "$MONITOR_SCRIPT" >/dev/null 2>&1 & echo -e "${GREEN}MONITOR RESTARTED.${NC}";;
+        3) 
+            # Universal Service Restart
+            if systemctl list-units --full -all | grep -Fq "$SSH_SERVICE.service"; then
+                systemctl restart "$SSH_SERVICE"
+            else
+                service "$SSH_SERVICE" restart
+            fi
+            echo -e "${GREEN}SSH RESTARTED.${NC}";;
         4) echo ""; tail -n 10 "$LOG_FILE";;
     esac
     pause
@@ -317,7 +352,8 @@ while true; do
     fi
 
     echo -e "${BLUE}========================${NC}"
-    echo -e "${WHITE}       SSH MANAGER      ${NC}"
+    echo -e "${WHITE}  SSH MANAGER (V28.4)   ${NC}"
+    echo -e "${WHITE}  OS: ${YELLOW}${OS^^}${NC}"
     echo -e "${BLUE}========================${NC}"
     echo ""
     echo -e " [01] ADD ACCOUNT"
