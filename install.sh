@@ -1,10 +1,9 @@
 #!/bin/bash
 
 # ==================================================
-#  SSH MANAGER BOT V35 - INSTALLER 🤖
-#  - UPDATED: MATCHES V28.3 FEATURES
-#  - OPTION: UNLIMITED vs CUSTOM DATE
-#  - STYLE: ENGLISH / ALL CAPS
+#  SSH MANAGER BOT V36 - NEW MESSAGE DESIGN 🎨
+#  - UPDATED: EXACT REQUESTED FORMAT
+#  - INCLUDES: COPYABLE USER:PASS
 # ==================================================
 
 # --- 1. PREPARE SYSTEM ---
@@ -40,7 +39,6 @@ ADMIN_ID = 7587310857
 
 DB_FILE = "/etc/xpanel/users_db.txt"
 LOG_FILE = "/var/log/kp_manager.log"
-BACKUP_DIR = "/root/backups"
 
 # ENSURE DIRECTORIES EXIST
 if not os.path.exists("/etc/xpanel"): os.makedirs("/etc/xpanel")
@@ -77,7 +75,6 @@ def get_status(u):
     return "OFFLINE"
 
 # --- MONITOR THREAD (EXPIRY ONLY) ---
-# Note: Multi-login is handled by the Bash script (kp_monitor.sh) to support the 60s delay.
 def monitor(updater):
     while True:
         try:
@@ -91,12 +88,10 @@ def monitor(updater):
                     if len(parts) < 3: continue
                     u, d, t = parts[0], parts[1], parts[2]
                     
-                    # SKIP IF UNLIMITED
                     if d == "NEVER": 
                         lines_keep.append(line)
                         continue
 
-                    # CHECK EXPIRY
                     kill = False
                     try:
                         exp = datetime.datetime.strptime(f"{d} {t}", "%Y-%m-%d %H:%M")
@@ -132,7 +127,7 @@ def start(update: Update, context: CallbackContext):
         [InlineKeyboardButton("⚙️ SETTINGS", callback_data='set')]
     ]
     
-    msg = "*🤖 SSH MANAGER V35*"
+    msg = "*🤖 SSH MANAGER V36*"
     if update.callback_query: 
         update.callback_query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
     else: 
@@ -141,7 +136,6 @@ def start(update: Update, context: CallbackContext):
 def btn(update: Update, context: CallbackContext):
     q = update.callback_query; q.answer(); data = q.data
     
-    # --- ADD USER FLOW ---
     if data == 'add': 
         context.user_data['act'] = 'a1'
         q.edit_message_text("ENTER USERNAME :")
@@ -153,7 +147,6 @@ def btn(update: Update, context: CallbackContext):
         context.user_data['act'] = 'a_date_input'
         q.edit_message_text("ENTER DATE (YYYY-MM-DD) :")
 
-    # --- OTHER MENUS ---
     elif data == 'ren': context.user_data['act'] = 'r1'; q.edit_message_text("ENTER USERNAME TO RENEW :")
     elif data == 'del': context.user_data['act'] = 'd1'; q.edit_message_text("ENTER USERNAME TO REMOVE :")
     elif data == 'lock': context.user_data['act'] = 'l1'; q.edit_message_text("ENTER USERNAME :")
@@ -187,7 +180,6 @@ def btn(update: Update, context: CallbackContext):
     elif data == 'tz': run_cmd("timedatectl set-timezone Africa/Tunis"); q.edit_message_text("🌍 TIMEZONE SET TO TUNIS.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]]))
     elif data == 'back': start(update, context)
     
-    # --- ACTIONS ---
     elif data.startswith('LK_'): u = data.split('_')[1]; run_cmd(f"usermod -L {u}"); run_cmd(f"pkill -KILL -u {u}"); q.edit_message_text(f"⛔ ACCOUNT {u} LOCKED.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]]))
     elif data.startswith('UL_'): u = data.split('_')[1]; run_cmd(f"usermod -U {u}"); q.edit_message_text(f"🔓 ACCOUNT {u} UNLOCKED.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]]))
     elif data.startswith('DEL_YES_'):
@@ -205,17 +197,34 @@ def create_user(update, context, d, t):
         run_cmd(f"echo '{u}:{p}' | chpasswd")
         with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{t}|Bot\n")
         
-        exp_txt = "UNLIMITED ♾️" if d == "NEVER" else f"{d} @ {t}"
-        
-        res = (
-            "✅ *ACCOUNT CREATED SUCCESSFULLY*\n"
-            "━━━━━━━━━━━━━━━━━━\n"
-            f"👤 USERNAME : `{u}`\n"
-            f"🔑 PASSWORD : `{p}`\n"
-            f"📅 EXPIRY   : {exp_txt}\n"
-            "━━━━━━━━━━━━━━━━━━"
-        )
-        # Send new message or edit depending on context
+        # --- NEW MESSAGE FORMAT HERE ---
+        if d == "NEVER":
+            res = (
+                "━━━━━━━━━━━━━━━━━━\n"
+                "ACCOUNT\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                f"👤 USER : `{u}`\n"
+                f"🔑 PASS : `{p}`\n"
+                f"📅 EXPIRY : UNLIMITED ♾️\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                f"`{u}:{p}`\n"
+                "━━━━━━━━━━━━━━━━━━"
+            )
+        else:
+            res = (
+                "━━━━━━━━━━━━━━━━━━\n"
+                "ACCOUNT\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                f"👤 USER : `{u}`\n"
+                f"🔑 PASS : `{p}`\n"
+                f"📅 EXPIRY : {d}\n"
+                f"⏰ Time : {t}\n"
+                "━━━━━━━━━━━━━━━━━━\n"
+                f"`{u}:{p}`\n"
+                "━━━━━━━━━━━━━━━━━━"
+            )
+        # -------------------------------
+
         try:
             update.callback_query.edit_message_text(res, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 MENU", callback_data='back')]]))
         except:
@@ -232,14 +241,12 @@ def txt(update: Update, context: CallbackContext):
     msg = update.message.text
     act = context.user_data.get('act')
     
-    # --- ADD USER STEPS ---
     if act == 'a1': 
         context.user_data.update({'nu': msg, 'act': 'a2'})
         update.message.reply_text("ENTER PASSWORD :")
         
     elif act == 'a2': 
         context.user_data.update({'np': msg})
-        # Ask for Expiry Type
         kb = [
             [InlineKeyboardButton("♾️ UNLIMITED (NEVER)", callback_data='a_unlim')],
             [InlineKeyboardButton("📅 CUSTOM DATE", callback_data='a_date')]
@@ -255,7 +262,6 @@ def txt(update: Update, context: CallbackContext):
         d = context.user_data['nd']
         create_user(update, context, d, t)
 
-    # --- RENEW STEPS ---
     elif act == 'r1': context.user_data.update({'ru': msg, 'act': 'r2'}); update.message.reply_text("ENTER NEW DATE (YYYY-MM-DD) :")
     elif act == 'r2': context.user_data.update({'rd': msg, 'act': 'r3'}); update.message.reply_text("ENTER NEW TIME (HH:MM) [23:59] :")
     elif act == 'r3':
@@ -273,7 +279,6 @@ def txt(update: Update, context: CallbackContext):
         else: update.message.reply_text("❌ ACCOUNT NOT FOUND!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]]))
         context.user_data['act'] = None; 
 
-    # --- OTHER ACTIONS ---
     elif act == 'd1': 
         u = msg; kb = [[InlineKeyboardButton("YES", callback_data=f'DEL_YES_{u}'), InlineKeyboardButton("NO", callback_data='DEL_NO')]]
         update.message.reply_text(f"CONFIRM DELETE ({u})?", reply_markup=InlineKeyboardMarkup(kb)); context.user_data['act'] = None
@@ -318,5 +323,5 @@ systemctl start sshbot
 
 echo ""
 echo -e "\033[1;32m============================================\033[0m"
-echo -e "\033[1;32m✅ BOT INSTALLED & RUNNING!\033[0m"
+echo -e "\033[1;32m✅ BOT UPDATED WITH NEW DESIGN!\033[0m"
 echo -e "\033[1;32m============================================\033[0m"
