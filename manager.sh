@@ -1,9 +1,8 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V41 (STABLE EDITION) 🚀
-#  - FIX: BOT CONNECTION TIMEOUTS
-#  - FIX: BUTTON RESPONSE FREEZE
-#  - MENU: GREEN STYLE 🟢
+#  SSH MANAGER V42 (PRIVATE EDITION) 🔒
+#  - ID & TOKEN: HARDCODED (READY TO USE)
+#  - BOT: ANTI-FREEZE + AUTO RESTART
 #  - MONITOR: STRICT (60s -> DELETE)
 # ==================================================
 
@@ -12,13 +11,10 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 # --- 1. DETECT OS ---
 if [[ -f /etc/debian_version ]]; then
     OS="debian"
-    SSH_SERVICE="ssh"
 elif [[ -f /etc/redhat-release ]]; then
     OS="centos"
-    SSH_SERVICE="sshd"
 else
     OS="unknown"
-    SSH_SERVICE="sshd"
 fi
 
 # --- CONFIG ---
@@ -40,7 +36,7 @@ mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  🛡️ MONITOR ENGINE (STRICT & LIGHTWEIGHT)
+#  🛡️ MONITOR ENGINE
 # ==================================================
 pkill -f kp_monitor.sh
 cat > "$MONITOR_SCRIPT" << 'EOF'
@@ -56,7 +52,7 @@ while true; do
         while IFS='|' read -r user date time note; do
             [[ -z "$user" || -z "$date" ]] && continue
             
-            # 1. Expiry Check
+            # 1. Expiry
             if [[ "$date" != "NEVER" ]]; then
                 [[ -z "$time" ]] && time="23:59"
                 EXP_TS=$(date -d "$date $time" +%s 2>/dev/null)
@@ -69,31 +65,23 @@ while true; do
                 fi
             fi
 
-            # 2. Multi-Login Check
+            # 2. Multi-Login
             if [[ "$user" == "root" ]]; then continue; fi
-            
-            # Efficient Counting (OpenSSH + Dropbear)
             c1=$(pgrep -f "sshd: $user " | wc -l)
             c2=$(pgrep -u "$user" "sshd" | wc -l)
             c3=$(pgrep -u "$user" "dropbear" | wc -l)
             
-            # Use max count logic
             if [[ "$c1" -gt "$c2" ]]; then COUNT=$((c1 + c3)); else COUNT=$((c2 + c3)); fi
             
             if [[ "$COUNT" -gt "$MAX_LOGIN" ]]; then
-                # Wait 60 Seconds (Grace Period)
                 sleep 60
-                
-                # Re-Check
                 c1=$(pgrep -f "sshd: $user " | wc -l)
                 c2=$(pgrep -u "$user" "sshd" | wc -l)
                 c3=$(pgrep -u "$user" "dropbear" | wc -l)
                 if [[ "$c1" -gt "$c2" ]]; then COUNT_AGAIN=$((c1 + c3)); else COUNT_AGAIN=$((c2 + c3)); fi
                 
                 if [[ "$COUNT_AGAIN" -gt "$MAX_LOGIN" ]]; then
-                    # === PERMANENT DELETE ===
                     pkill -KILL -u "$user"
-                    killall -u "$user" 2>/dev/null
                     userdel -f -r "$user" 2>/dev/null
                     sed -i "/^$user|/d" "$DB"
                     echo "$(date) | CHEATER | DELETED $user" >> "$LOG"
@@ -128,10 +116,9 @@ fun_create() {
         read -p " ENTER TIME (HH:MM)     : " t
         [[ -z "$t" ]] && t="23:59"
     else d="NEVER"; t="00:00"; echo -e "${GREEN}ℹ️  SET TO UNLIMITED${NC}"; fi
-    
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V41" >> "$USER_DB"
+    echo "$u|$d|$t|V42" >> "$USER_DB"
     echo -e "${GREEN}✔ ACCOUNT CREATED!${NC}"; pause
 }
 
@@ -191,7 +178,6 @@ fun_list() {
         is_on=0
         if pgrep -f "sshd: $u " >/dev/null; then is_on=1; fi
         if pgrep -u "$u" "dropbear" >/dev/null; then is_on=1; fi
-        
         if [[ $is_on -eq 1 ]]; then st="${GREEN}ONLINE 🟢${NC}"
         elif passwd -S "$u" | grep -q " L "; then st="${RED}LOCKED ⛔${NC}"
         else st="${RED}OFFLINE${NC}"; fi
@@ -213,7 +199,6 @@ fun_online() {
         is_on=0
         if pgrep -f "sshd: $u " >/dev/null; then is_on=1; fi
         if pgrep -u "$u" "dropbear" >/dev/null; then is_on=1; fi
-        
         if [[ $is_on -eq 1 ]]; then
             printf "${YELLOW}%-14s ${NC}| ${GREEN}ONLINE 🟢${NC}\n" "$u"
             ((count++))
@@ -233,11 +218,11 @@ fun_save() {
     echo -e "${GREEN}✅ DATA BACKED UP!${NC}"; echo -e "PATH: $BACKUP_DIR/$B_NAME"; pause
 }
 
-# --- 🤖 BOT INSTALLER (FIXED TIMEOUTS & FREEZING) ---
+# --- 🤖 BOT INSTALLER (PERSONALIZED) ---
 fun_install_bot() {
     clear
     echo -e "${BLUE}==================================================${NC}"
-    echo -e "${YELLOW}           INSTALLING STABLE BOT V41...           ${NC}"
+    echo -e "${YELLOW}           INSTALLING YOUR PRIVATE BOT...         ${NC}"
     echo -e "${BLUE}==================================================${NC}"
     
     # 1. Install Dependencies
@@ -247,13 +232,13 @@ fun_install_bot() {
     else
         yum install epel-release -y >/dev/null; yum install python3 python3-pip -y >/dev/null
     fi
-    # Force reinstall to ensure clean environment
+    # Force Correct Version
     pip3 install --upgrade --force-reinstall python-telegram-bot==13.7 schedule >/dev/null 2>&1
 
     # 2. Stop Old
     systemctl stop sshbot >/dev/null 2>&1; rm -f /root/ssh_bot.py
 
-    # 3. Write Bot Code
+    # 3. Write Bot Code (HARDCODED CREDENTIALS)
     echo -e ">> WRITING BOT CODE..."
     cat > /root/ssh_bot.py << 'EOF'
 import logging, os, subprocess, threading, time
@@ -261,12 +246,12 @@ from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMo
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 from telegram.utils.request import Request
 
+# --- YOUR CREDENTIALS ---
 TOKEN = "7867550558:AAHqNQ6s6lveMXs9CS51g_ZSbcga63sfacE"
 ADMIN_ID = 7587310857
 DB_FILE = "/etc/xpanel/users_db.txt"
 
-# Enable logging to catch errors
-logging.basicConfig(level=logging.ERROR, filename='/var/log/kp_bot.log')
+logging.basicConfig(level=logging.ERROR)
 
 def run_cmd(cmd):
     try: subprocess.run(cmd, shell=True, check=True); return True
@@ -286,13 +271,13 @@ def start(update: Update, context: CallbackContext):
               [InlineKeyboardButton("🗑️ REMOVE", callback_data='del'), InlineKeyboardButton("🔒 LOCK/UNLOCK", callback_data='lock')],
               [InlineKeyboardButton("📋 LIST", callback_data='list'), InlineKeyboardButton("🟢 ONLINE", callback_data='onl')],
               [InlineKeyboardButton("💾 BACKUP", callback_data='bak'), InlineKeyboardButton("⚙️ SETTINGS", callback_data='set')]]
-        update.message.reply_text("*🤖 SSH MANAGER V41*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
+        update.message.reply_text("*🤖 SSH MANAGER V42*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
     except: pass
 
 def btn(update: Update, context: CallbackContext):
     try:
         q = update.callback_query
-        try: q.answer() # IMPORTANT: Prevents button loading freeze
+        try: q.answer() 
         except: pass
         
         data = q.data
@@ -331,7 +316,6 @@ def btn(update: Update, context: CallbackContext):
         elif data == 'tz': run_cmd("timedatectl set-timezone Africa/Tunis"); q.edit_message_text("🌍 DONE.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         elif data == 'back': start(update, context)
         
-        # Logic buttons
         elif data == 'a_unlim': create_user(update, context, "NEVER", "00:00")
         elif data == 'a_date': context.user_data['act']='a_date_input'; q.edit_message_text("ENTER DATE (YYYY-MM-DD):")
         
@@ -385,12 +369,10 @@ def txt(update: Update, context: CallbackContext):
     except: pass
 
 def main():
-    # FIX: Timeout settings to prevent freezing on bad network
-    request = Request(connect_timeout=10.0, read_timeout=10.0)
-    updater = Updater(TOKEN, request_kwargs={'read_timeout': 10, 'connect_timeout': 10}, use_context=True)
+    req = Request(connect_timeout=20.0, read_timeout=20.0)
+    updater = Updater(TOKEN, request_kwargs={'read_timeout': 20, 'connect_timeout': 20}, use_context=True)
     dp = updater.dispatcher
     dp.add_handler(CommandHandler("start", start))
-    # FIX: Run buttons async to handle multiple requests
     dp.add_handler(CallbackQueryHandler(btn, run_async=True))
     dp.add_handler(MessageHandler(Filters.text, txt))
     up.start_polling(drop_pending_updates=True)
@@ -407,7 +389,7 @@ After=network.target
 [Service]
 ExecStart=/usr/bin/python3 /root/ssh_bot.py
 Restart=always
-RestartSec=5
+RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -442,14 +424,13 @@ fun_settings() {
     pause
 }
 
-# --- MAIN MENU (GREEN STYLE) ---
+# --- MAIN MENU ---
 while true; do
     clear
-    # Monitor Check
     if ! pgrep -f "kp_monitor.sh" > /dev/null; then nohup "$MONITOR_SCRIPT" >/dev/null 2>&1 & fi
 
     echo -e "${BLUE}==================================================${NC}"
-    echo -e "${WHITE}  SSH MANAGER (V41)     ${NC}"
+    echo -e "${WHITE}  SSH MANAGER (V42)     ${NC}"
     echo -e "${WHITE}  OS: ${YELLOW}${OS^^}${NC}"
     echo -e "${BLUE}==================================================${NC}"
     echo ""
