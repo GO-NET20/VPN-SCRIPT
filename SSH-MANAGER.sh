@@ -2,7 +2,7 @@
 # ==================================================
 #  SSH MANAGER V28.1 - STABLE FIX 🔧
 #  MULTILOGIN CHECK REMOVED
-#  ADD USER WITH OPTIONAL EXPIRY
+#  ADD USER WITH SIMPLE EXPIRY OPTION
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -40,8 +40,6 @@ while true; do
     if [[ -f "$DB" ]]; then
         while IFS='|' read -r user date time note; do
             [[ -z "$user" || -z "$date" ]] && continue
-            
-            # CHECK EXPIRY ONLY
             if [[ "$date" != "never" ]]; then
                 [[ -z "$time" ]] && time="23:59"
                 EXP_TS=$(date -d "$date $time" +%s 2>/dev/null)
@@ -54,7 +52,6 @@ while true; do
                     continue
                 fi
             fi
-
         done < "$DB"
     fi
     sleep 3
@@ -80,15 +77,10 @@ fun_create() {
     if id "$u" &>/dev/null; then echo -e "${RED}❌ USER ALREADY EXISTS!${NC}"; pause; return; fi
     read -p " ENTER PASSWORD :" p
     
-    echo ""
-    echo "Do you want to set EXPIRY DATE & TIME for this user?"
-    echo " [1] YES"
-    echo " [2] NO (PERMANENT USER)"
-    read -p " SELECT OPTION: " choice
-    
-    if [[ "$choice" == "1" ]]; then
+    read -p "Set expiry? (yes/no): " choice
+    if [[ "$choice" == "yes" || "$choice" == "y" ]]; then
         read -p " ENTER DATE (YYYY-MM-DD): " d
-        if ! date -d "$d" >/dev/null 2>&1; then echo -e "${RED}❌ INVALID DATE!${NC}"; pause; return; fi
+        if ! date -d "$d" >/dev/null 2>&1; then echo "❌ INVALID DATE!"; pause; return; fi
         read -p " ENTER TIME (HH:MM) [default 23:59]: " t
         [[ -z "$t" ]] && t="23:59"
     else
@@ -100,7 +92,6 @@ fun_create() {
     echo "$u:$p" | chpasswd
     echo "$u|$d|$t|V28" >> "$USER_DB"
     
-    echo ""
     echo -e "${GREEN}✔ USER CREATED SUCCESSFULLY!${NC}"
     echo -e "USER: $u | EXP: $d @ $t"
     pause
@@ -137,9 +128,8 @@ fun_remove() {
     echo -e "${BLUE}==================================================${NC}"
     echo ""
     read -p " ENTER USERNAME TO REMOVE: " u
-    echo -e "${RED}ARE YOU SURE YOU WANT TO REMOVE ($u)? (Y/N)${NC}"
-    read -p "> " confirm
-    if [[ "$confirm" == "Y" || "$confirm" == "y" ]]; then
+    read -p "ARE YOU SURE YOU WANT TO REMOVE ($u)? (y/n): " confirm
+    if [[ "$confirm" == "y" || "$confirm" == "Y" ]]; then
         pkill -u "$u"; userdel -f -r "$u"
         sed -i "/^$u|/d" "$USER_DB"
         echo -e "${RED}🗑️ USER REMOVED SUCCESSFULLY.${NC}"
@@ -155,12 +145,9 @@ fun_lock() {
     echo -e "${BLUE}==================================================${NC}"
     echo -e "${YELLOW}             [04] LOCK OR UNLOCK USER             ${NC}"
     echo -e "${BLUE}==================================================${NC}"
-    echo ""
     read -p " ENTER USERNAME: " u
-    echo ""
     echo " [1] LOCK ⛔ (BAN USER)"
     echo " [2] UNLOCK 🔓 (UNBAN USER)"
-    echo ""
     read -p " SELECT ACTION: " act
     
     if [[ "$act" == "1" ]]; then 
@@ -218,9 +205,6 @@ fun_online() {
 # [07] SAVE DATA
 fun_save() {
     clear
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${YELLOW}                 [07] SAVE DATA                   ${NC}"
-    echo -e "${BLUE}==================================================${NC}"
     B_NAME="BACKUP_$(date '+%Y%m%d').txt"
     cp "$USER_DB" "$BACKUP_DIR/$B_NAME"
     echo -e "${GREEN}✅ DATA SAVED SUCCESSFULLY!${NC}"
@@ -231,21 +215,17 @@ fun_save() {
 # [08] SETTINGS
 fun_settings() {
     clear
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${YELLOW}                  [08] SETTINGS                   ${NC}"
-    echo -e "${BLUE}==================================================${NC}"
     echo " [1] FIX TIMEZONE (TUNISIA)"
     echo " [2] RESTART MONITOR SERVICE"
     echo " [3] SET SERVER BANNER"
     echo " [4] VIEW LOGS"
-    echo ""
     read -p " SELECT OPTION: " s
     
     case "$s" in
-        1) timedatectl set-timezone Africa/Tunis; echo -e "${GREEN}DONE.${NC}";;
-        2) pkill -f kp_monitor.sh; nohup "$MONITOR_SCRIPT" >/dev/null 2>&1 & echo -e "${GREEN}RESTARTED.${NC}";;
-        3) read -p "BANNER TEXT: " b; echo "$b" > "$BANNER_FILE"; service ssh restart; echo -e "${GREEN}UPDATED.${NC}";;
-        4) echo ""; tail -n 10 "$LOG_FILE";;
+        1) timedatectl set-timezone Africa/Tunis ;;
+        2) pkill -f kp_monitor.sh; nohup "$MONITOR_SCRIPT" >/dev/null 2>&1 & ;;
+        3) read -p "BANNER TEXT: " b; echo "$b" > "$BANNER_FILE"; service ssh restart ;;
+        4) tail -n 10 "$LOG_FILE" ;;
     esac
     pause
 }
@@ -263,7 +243,6 @@ while true; do
     echo -e "${BLUE}==================================================${NC}"
     echo -e "${WHITE}                   SSH MANAGER                    ${NC}"
     echo -e "${BLUE}==================================================${NC}"
-    echo -e ""
     echo -e " [01] ADD USER"
     echo -e " [02] RENEW USER"
     echo -e " [03] REMOVE USER"
@@ -273,11 +252,7 @@ while true; do
     echo -e " [07] SAVE DATA"
     echo -e " [08] SETTINGS"
     echo -e " [00] EXIT"
-    echo -e ""
-    echo -e "${BLUE}==================================================${NC}"
     echo -e " MONITOR: $MON_MSG"
-    echo -e "${BLUE}==================================================${NC}"
-    echo ""
     read -p " SELECT OPTION: " opt
     
     case "$opt" in
