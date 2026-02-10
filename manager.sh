@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V39 (FIXED BOT + GREEN MENU) 🚀
-#  - MENU: EXACT GREEN STYLE FROM SCREENSHOT
-#  - ENGINE: STRICT MONITOR (60s -> DELETE)
-#  - BOT: V39 ANTI-FREEZE & AUTO-RESTART
+#  SSH MANAGER V40 (TURBO BOT) 🚀
+#  - BOT: RUN_ASYNC ENABLED (NO FREEZING) ⚡
+#  - MONITOR: OPTIMIZED CPU USAGE
+#  - MENU: GREEN STYLE 🟢
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -27,20 +27,19 @@ LOG_FILE="/var/log/kp_manager.log"
 BACKUP_DIR="/root/backups"
 MAX_LOGIN=1
 
-# --- COLORS (Green Style) ---
+# --- COLORS ---
 RED='\033[1;31m'
 GREEN='\033[1;32m'
 YELLOW='\033[1;33m'
 BLUE='\033[1;34m'
 CYAN='\033[1;36m'
-WHITE='\033[1;37m'
 NC='\033[0m'
 
 mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  🛡️ STRICT MONITOR ENGINE (BACKGROUND)
+#  🛡️ OPTIMIZED MONITOR ENGINE (LIGHTWEIGHT)
 # ==================================================
 pkill -f kp_monitor.sh
 cat > "$MONITOR_SCRIPT" << 'EOF'
@@ -49,29 +48,17 @@ DB="/etc/xpanel/users_db.txt"
 LOG="/var/log/kp_manager.log"
 MAX_LOGIN=1
 
-count_connections() {
-    local u=$1
-    # 1. Root processes (Modern SSH)
-    local ssh_new=$(ps -ef | grep "sshd: $u " | grep -v grep | wc -l)
-    # 2. User processes (Old SSH)
-    local ssh_old=$(ps -u "$u" 2>/dev/null | grep "sshd" | wc -l)
-    # 3. Dropbear
-    local drop=$(ps -u "$u" 2>/dev/null | grep "dropbear" | wc -l)
-    
-    if [[ "$ssh_new" -gt "$ssh_old" ]]; then 
-        echo $((ssh_new + drop))
-    else 
-        echo $((ssh_old + drop))
-    fi
-}
-
 while true; do
+    # Sleep increased to 5s to save CPU for the Bot
+    sleep 5
+    
     if [[ -f "$DB" ]]; then
         NOW=$(date +%s)
+        # Read DB line by line
         while IFS='|' read -r user date time note; do
             [[ -z "$user" || -z "$date" ]] && continue
             
-            # Expiry
+            # 1. Check Expiry
             if [[ "$date" != "NEVER" ]]; then
                 [[ -z "$time" ]] && time="23:59"
                 EXP_TS=$(date -d "$date $time" +%s 2>/dev/null)
@@ -84,16 +71,32 @@ while true; do
                 fi
             fi
 
-            # Multi-Login (STRICT DELETE)
+            # 2. Check Multi-Login (Lightweight Method)
             if [[ "$user" == "root" ]]; then continue; fi
-            COUNT=$(count_connections "$user")
+            
+            # Count processes efficiently
+            # OpenSSH (root owned) + User Owned + Dropbear
+            # We use pgrep which is faster than piping ps | grep
+            c1=$(pgrep -f "sshd: $user " | wc -l)
+            c2=$(pgrep -u "$user" "sshd" | wc -l)
+            c3=$(pgrep -u "$user" "dropbear" | wc -l)
+            
+            # Max logic
+            if [[ "$c1" -gt "$c2" ]]; then COUNT=$((c1 + c3)); else COUNT=$((c2 + c3)); fi
             
             if [[ "$COUNT" -gt "$MAX_LOGIN" ]]; then
+                # Wait 60s
                 sleep 60
-                COUNT_AGAIN=$(count_connections "$user")
+                
+                # Re-Check
+                c1=$(pgrep -f "sshd: $user " | wc -l)
+                c2=$(pgrep -u "$user" "sshd" | wc -l)
+                c3=$(pgrep -u "$user" "dropbear" | wc -l)
+                if [[ "$c1" -gt "$c2" ]]; then COUNT_AGAIN=$((c1 + c3)); else COUNT_AGAIN=$((c2 + c3)); fi
+                
                 if [[ "$COUNT_AGAIN" -gt "$MAX_LOGIN" ]]; then
                     pkill -KILL -u "$user"
-                    ps -ef | grep "sshd: $user " | grep -v grep | awk '{print $2}' | xargs -r kill -9 2>/dev/null
+                    killall -u "$user" 2>/dev/null
                     userdel -f -r "$user" 2>/dev/null
                     sed -i "/^$user|/d" "$DB"
                     echo "$(date) | CHEATER | DELETED $user" >> "$LOG"
@@ -101,7 +104,6 @@ while true; do
             fi
         done < "$DB"
     fi
-    sleep 3
 done
 EOF
 chmod +x "$MONITOR_SCRIPT"
@@ -132,7 +134,7 @@ fun_create() {
     
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V39" >> "$USER_DB"
+    echo "$u|$d|$t|V40" >> "$USER_DB"
     echo -e "${GREEN}✔ ACCOUNT CREATED!${NC}"; pause
 }
 
@@ -190,8 +192,8 @@ fun_list() {
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
         is_on=0
-        if ps -ef | grep "sshd: $u " | grep -v grep | grep -q "sshd"; then is_on=1; fi
-        if ps -u "$u" 2>/dev/null | grep -E -q "sshd|dropbear"; then is_on=1; fi
+        if pgrep -f "sshd: $u " >/dev/null; then is_on=1; fi
+        if pgrep -u "$u" "dropbear" >/dev/null; then is_on=1; fi
         
         if [[ $is_on -eq 1 ]]; then st="${GREEN}ONLINE 🟢${NC}"
         elif passwd -S "$u" | grep -q " L "; then st="${RED}LOCKED ⛔${NC}"
@@ -212,8 +214,8 @@ fun_online() {
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
         is_on=0
-        if ps -ef | grep "sshd: $u " | grep -v grep | grep -q "sshd"; then is_on=1; fi
-        if ps -u "$u" 2>/dev/null | grep -E -q "sshd|dropbear"; then is_on=1; fi
+        if pgrep -f "sshd: $u " >/dev/null; then is_on=1; fi
+        if pgrep -u "$u" "dropbear" >/dev/null; then is_on=1; fi
         
         if [[ $is_on -eq 1 ]]; then
             printf "${YELLOW}%-14s ${NC}| ${GREEN}ONLINE 🟢${NC}\n" "$u"
@@ -234,11 +236,11 @@ fun_save() {
     echo -e "${GREEN}✅ DATA BACKED UP!${NC}"; echo -e "PATH: $BACKUP_DIR/$B_NAME"; pause
 }
 
-# --- 🤖 BOT INSTALLER (V39 ANTI-FREEZE FIX) ---
+# --- 🤖 BOT INSTALLER (ASYNC TURBO MODE) ---
 fun_install_bot() {
     clear
     echo -e "${BLUE}==================================================${NC}"
-    echo -e "${YELLOW}           INSTALLING FIXED BOT V39...            ${NC}"
+    echo -e "${YELLOW}           INSTALLING TURBO BOT V40...            ${NC}"
     echo -e "${BLUE}==================================================${NC}"
     
     # 1. Install Dependencies
@@ -253,20 +255,18 @@ fun_install_bot() {
     # 2. Stop Old
     systemctl stop sshbot >/dev/null 2>&1; rm -f /root/ssh_bot.py
 
-    # 3. Write Bot Code
+    # 3. Write Bot Code (ASYNC ENABLED)
     echo -e ">> WRITING BOT CODE..."
     cat > /root/ssh_bot.py << 'EOF'
-import logging, os, subprocess, threading, time, datetime
+import logging, os, subprocess, threading, time
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
-from telegram.utils.request import Request
 
 TOKEN = "7867550558:AAHqNQ6s6lveMXs9CS51g_ZSbcga63sfacE"
 ADMIN_ID = 7587310857
 DB_FILE = "/etc/xpanel/users_db.txt"
 
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 def run_cmd(cmd):
     try: subprocess.run(cmd, shell=True, check=True); return True
@@ -274,9 +274,7 @@ def run_cmd(cmd):
 
 def get_status(u):
     try:
-        cmd_ssh = f"ps -ef | grep 'sshd: {u} ' | grep -v grep"
-        cmd_drop = f"ps -u {u} | grep dropbear"
-        if subprocess.getoutput(cmd_ssh) or subprocess.getoutput(cmd_drop): return "ONLINE 🟢"
+        if subprocess.getoutput(f"pgrep -f 'sshd: {u} '") or subprocess.getoutput(f"pgrep -u {u} dropbear"): return "ONLINE 🟢"
         if " L " in subprocess.getoutput(f"passwd -S {u}"): return "LOCKED ⛔"
     except: pass
     return "OFFLINE 🔴"
@@ -285,27 +283,23 @@ def start(update: Update, context: CallbackContext):
     try:
         if update.effective_user.id != ADMIN_ID: return
         kb = [[InlineKeyboardButton("👤 ADD ACCOUNT", callback_data='add'), InlineKeyboardButton("🔄 RENEW", callback_data='ren')],
-              [InlineKeyboardButton("🗑️ REMOVE ACCOUNT", callback_data='del'), InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock')],
-              [InlineKeyboardButton("📋 LIST ACCOUNTS", callback_data='list'), InlineKeyboardButton("🟢 ONLINE USERS", callback_data='onl')],
-              [InlineKeyboardButton("💾 BACKUP DATA", callback_data='bak'), InlineKeyboardButton("⚙️ SETTINGS", callback_data='set')]]
-        update.message.reply_text("*🤖 SSH MANAGER BOT V39*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
+              [InlineKeyboardButton("🗑️ REMOVE", callback_data='del'), InlineKeyboardButton("🔒 LOCK/UNLOCK", callback_data='lock')],
+              [InlineKeyboardButton("📋 LIST", callback_data='list'), InlineKeyboardButton("🟢 ONLINE", callback_data='onl')],
+              [InlineKeyboardButton("💾 BACKUP", callback_data='bak'), InlineKeyboardButton("⚙️ SETTINGS", callback_data='set')]]
+        update.message.reply_text("*🤖 SSH MANAGER V40 (TURBO)*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
     except: pass
 
 def btn(update: Update, context: CallbackContext):
     try:
         q = update.callback_query
-        # FIX: Respond immediately to prevent freezing
-        try: q.answer()
-        except: pass 
+        try: q.answer() # INSTANT ANSWER TO PREVENT FREEZE
+        except: pass
         
         data = q.data
         if data == 'add': context.user_data['act']='a1'; q.edit_message_text("ENTER USERNAME:")
         elif data == 'ren': context.user_data['act']='r1'; q.edit_message_text("ENTER USERNAME:")
         elif data == 'del': context.user_data['act']='d1'; q.edit_message_text("ENTER USERNAME:")
         elif data == 'lock': context.user_data['act']='l1'; q.edit_message_text("ENTER USERNAME:")
-        
-        elif data == 'a_unlim': create_user(update, context, "NEVER", "00:00")
-        elif data == 'a_date': context.user_data['act']='a_date_input'; q.edit_message_text("ENTER DATE (YYYY-MM-DD):")
         
         elif data == 'list':
             msg = "USER | EXPIRY\n------------------\n"
@@ -315,6 +309,7 @@ def btn(update: Update, context: CallbackContext):
                         p = l.strip().split('|')
                         if len(p)>=2: msg += f"{p[0]:<10} | {p[1]}\n"
             q.edit_message_text(f"```\n{msg}```", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+        
         elif data == 'onl':
             msg = "USER | STATUS\n------------------\n"
             if os.path.exists(DB_FILE):
@@ -324,14 +319,21 @@ def btn(update: Update, context: CallbackContext):
                         st = get_status(u)
                         if "ONLINE" in st: msg += f"{u:<10} | {st}\n"
             q.edit_message_text(f"```\n{msg}```", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            
         elif data == 'bak':
             if os.path.exists(DB_FILE): context.bot.send_document(chat_id=ADMIN_ID, document=open(DB_FILE, 'rb'), filename="users_db.txt")
-            q.edit_message_text("✅ DATA BACKED UP!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            q.edit_message_text("✅ DONE!", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            
         elif data == 'set':
             kb = [[InlineKeyboardButton("🌍 FIX TIMEZONE", callback_data='tz')], [InlineKeyboardButton("BACK", callback_data='back')]]
             q.edit_message_text("⚙️ SETTINGS:", reply_markup=InlineKeyboardMarkup(kb))
-        elif data == 'tz': run_cmd("timedatectl set-timezone Africa/Tunis"); q.edit_message_text("🌍 TIMEZONE SET.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+        
+        elif data == 'tz': run_cmd("timedatectl set-timezone Africa/Tunis"); q.edit_message_text("🌍 DONE.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         elif data == 'back': start(update, context)
+        
+        # Logic buttons
+        elif data == 'a_unlim': create_user(update, context, "NEVER", "00:00")
+        elif data == 'a_date': context.user_data['act']='a_date_input'; q.edit_message_text("ENTER DATE (YYYY-MM-DD):")
         
         elif data.startswith('LK_'): u = data.split('_')[1]; run_cmd(f"usermod -L {u}"); run_cmd(f"pkill -KILL -u {u}"); q.edit_message_text(f"⛔ LOCKED {u}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         elif data.startswith('UL_'): u = data.split('_')[1]; run_cmd(f"usermod -U {u}"); q.edit_message_text(f"🔓 UNLOCKED {u}", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
@@ -346,8 +348,6 @@ def btn(update: Update, context: CallbackContext):
 def create_user(update, context, d, t):
     try:
         u = context.user_data.get('nu'); p = context.user_data.get('np')
-        if not u or not p: return 
-        
         if run_cmd(f"useradd -M -s /bin/false {u}"):
             run_cmd(f"echo '{u}:{p}' | chpasswd")
             with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{t}|Bot\n")
@@ -385,14 +385,13 @@ def txt(update: Update, context: CallbackContext):
     except: pass
 
 def main():
-    # Fix Timeouts and Freezes
-    req = Request(connect_timeout=10.0, read_timeout=10.0)
-    up = Updater(TOKEN, request_kwargs={'read_timeout': 10, 'connect_timeout': 10}, use_context=True)
+    up = Updater(TOKEN, use_context=True)
     dp = up.dispatcher
     dp.add_handler(CommandHandler("start", start))
-    dp.add_handler(CallbackQueryHandler(btn))
+    # ENABLE ASYNC THREADING FOR BUTTONS TO PREVENT FREEZE
+    dp.add_handler(CallbackQueryHandler(btn, run_async=True))
     dp.add_handler(MessageHandler(Filters.text, txt))
-    up.start_polling(drop_pending_updates=True)
+    up.start_polling()
     up.idle()
 
 if __name__ == '__main__': main()
@@ -406,7 +405,7 @@ After=network.target
 [Service]
 ExecStart=/usr/bin/python3 /root/ssh_bot.py
 Restart=always
-RestartSec=5
+RestartSec=3
 [Install]
 WantedBy=multi-user.target
 EOF
@@ -448,7 +447,7 @@ while true; do
     if ! pgrep -f "kp_monitor.sh" > /dev/null; then nohup "$MONITOR_SCRIPT" >/dev/null 2>&1 & fi
 
     echo -e "${BLUE}==================================================${NC}"
-    echo -e "${WHITE}  SSH MANAGER (V28.4)   ${NC}"
+    echo -e "${WHITE}  SSH MANAGER (V40)     ${NC}"
     echo -e "${WHITE}  OS: ${YELLOW}${OS^^}${NC}"
     echo -e "${BLUE}==================================================${NC}"
     echo ""
