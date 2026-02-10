@@ -1,9 +1,10 @@
 #!/bin/bash
 
 # ==================================================
-#  SSH MANAGER BOT V36 - NEW MESSAGE DESIGN 🎨
-#  - UPDATED: EXACT REQUESTED FORMAT
-#  - INCLUDES: COPYABLE USER:PASS
+#  SSH MANAGER BOT V36.1 - FINAL STABLE 🤖
+#  - DESIGN: COPYABLE USER:PASS + NEW STYLE
+#  - COMPATIBILITY: DETECTS SSHD + DROPBEAR
+#  - ENGINE: SYNCED WITH V28.4 SCRIPT
 # ==================================================
 
 # --- 1. PREPARE SYSTEM ---
@@ -67,14 +68,20 @@ def get_users():
 
 def get_status(u):
     try:
+        # Check if user exists in system
         if not run_cmd(f"id {u}"): return "OFFLINE"
+        
+        # Check if locked
         if " L " in subprocess.getoutput(f"passwd -S {u}"): return "LOCKED"
-        check = subprocess.getoutput(f"ps -u {u} -o stat,comm | grep -v 'Z' | grep 'sshd'")
+        
+        # Check connection (UPDATED: Supports SSHD & DROPBEAR)
+        check = subprocess.getoutput(f"ps -u {u} -o comm= | grep -E 'sshd|dropbear'")
         if check: return "ONLINE"
     except: pass
     return "OFFLINE"
 
 # --- MONITOR THREAD (EXPIRY ONLY) ---
+# Note: Multi-login is handled by the Bash script (kp_monitor.sh)
 def monitor(updater):
     while True:
         try:
@@ -88,6 +95,7 @@ def monitor(updater):
                     if len(parts) < 3: continue
                     u, d, t = parts[0], parts[1], parts[2]
                     
+                    # Ignore Unlimited Users
                     if d == "NEVER": 
                         lines_keep.append(line)
                         continue
@@ -127,7 +135,7 @@ def start(update: Update, context: CallbackContext):
         [InlineKeyboardButton("⚙️ SETTINGS", callback_data='set')]
     ]
     
-    msg = "*🤖 SSH MANAGER V36*"
+    msg = "*🤖 SSH MANAGER V36.1*"
     if update.callback_query: 
         update.callback_query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
     else: 
@@ -136,6 +144,7 @@ def start(update: Update, context: CallbackContext):
 def btn(update: Update, context: CallbackContext):
     q = update.callback_query; q.answer(); data = q.data
     
+    # --- ADD USER ---
     if data == 'add': 
         context.user_data['act'] = 'a1'
         q.edit_message_text("ENTER USERNAME :")
@@ -147,15 +156,18 @@ def btn(update: Update, context: CallbackContext):
         context.user_data['act'] = 'a_date_input'
         q.edit_message_text("ENTER DATE (YYYY-MM-DD) :")
 
+    # --- ACTIONS ---
     elif data == 'ren': context.user_data['act'] = 'r1'; q.edit_message_text("ENTER USERNAME TO RENEW :")
     elif data == 'del': context.user_data['act'] = 'd1'; q.edit_message_text("ENTER USERNAME TO REMOVE :")
     elif data == 'lock': context.user_data['act'] = 'l1'; q.edit_message_text("ENTER USERNAME :")
     
+    # --- LIST ---
     elif data == 'list':
         us = get_users()
         msg = "NO ACCOUNTS FOUND." if not us else "USER           | EXPIRY\n-----------------------------------\n" + "\n".join([f"{x['u']:<14} | {x['d']}" for x in us])
         q.edit_message_text(f"```\n{msg}\n```", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]]))
     
+    # --- ONLINE ---
     elif data == 'onl':
         us = get_users()
         if not us: msg = "NO ACCOUNTS FOUND."
@@ -197,7 +209,7 @@ def create_user(update, context, d, t):
         run_cmd(f"echo '{u}:{p}' | chpasswd")
         with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{t}|Bot\n")
         
-        # --- NEW MESSAGE FORMAT HERE ---
+        # --- NEW MESSAGE DESIGN ---
         if d == "NEVER":
             res = (
                 "━━━━━━━━━━━━━━━━━━\n"
@@ -223,8 +235,7 @@ def create_user(update, context, d, t):
                 f"`{u}:{p}`\n"
                 "━━━━━━━━━━━━━━━━━━"
             )
-        # -------------------------------
-
+        
         try:
             update.callback_query.edit_message_text(res, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 MENU", callback_data='back')]]))
         except:
@@ -323,5 +334,5 @@ systemctl start sshbot
 
 echo ""
 echo -e "\033[1;32m============================================\033[0m"
-echo -e "\033[1;32m✅ BOT UPDATED WITH NEW DESIGN!\033[0m"
+echo -e "\033[1;32m✅ BOT UPDATED WITH FINAL DESIGN & FIXES!\033[0m"
 echo -e "\033[1;32m============================================\033[0m"
