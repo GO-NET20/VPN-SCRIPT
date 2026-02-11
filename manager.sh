@@ -1,15 +1,14 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V63 (FINAL PERFECTED EDITION) 🌟
-#  - UI: EXACT MATCH TO YOUR SCREENSHOTS ✅
-#  - ALIGNMENT: PERFECT TABLE COLUMNS ✅
-#  - COPY: CLICK-TO-COPY CREDENTIALS ✅
-#  - FIX: DEBIAN 12+ COMPATIBILITY & SERVICE ORDER ✅
+#  SSH MANAGER V63 (FINAL SYSTEM FIX) 🔧
+#  - FIXED: PIP INSTALL ERROR ON DEBIAN 12+ ✅
+#  - FIXED: SERVICE STARTUP ISSUE ✅
+#  - UI: EXACT DESIGN FROM YOUR SCREENSHOTS ✅
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-# --- 1. DETECT OS & VARS ---
+# --- 1. DETECT OS ---
 if [[ -f /etc/debian_version ]]; then
     OS="debian"; SSH_SERVICE="ssh"
 elif [[ -f /etc/redhat-release ]]; then
@@ -18,12 +17,13 @@ else
     OS="unknown"; SSH_SERVICE="sshd"
 fi
 
+# --- CONFIG ---
 USER_DB="/etc/xpanel/users_db.txt"
 BOT_CONF="/etc/xpanel/bot.conf"
 LOG_FILE="/var/log/kp_manager.log"
 BACKUP_DIR="/root/backups"
 
-# --- AUTO CREDENTIALS ---
+# --- CREDENTIALS (AUTO) ---
 MY_TOKEN="8275679858:AAGCTP9tsJzCgzXXzgA9hJQ8ooqhlFY8BcA"
 MY_ID="7587310857"
 
@@ -35,7 +35,7 @@ mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  🚫 CLEANUP (PREVENTS CONFLICTS)
+#  🚫 CLEANUP (Essential for Fix)
 # ==================================================
 pkill -f ssh_bot.py
 systemctl stop sshbot >/dev/null 2>&1
@@ -57,10 +57,8 @@ check_status_cli() {
 }
 
 fun_create() {
-    clear; echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}               ADD NEW USER               ${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    read -p " 👤 USERNAME : " u
+    clear; echo -e "${BLUE}=== ADD USER ===${NC}"
+    read -p " 👤 ENTER USERNAME : " u
     if [[ ! "$u" =~ ^[a-zA-Z0-9]+$ ]]; then echo -e "${RED}❌ INVALID CHARS!${NC}"; pause; return; fi
     if id "$u" &>/dev/null; then echo -e "${RED}❌ EXISTS!${NC}"; pause; return; fi
     read -p " 🔑 PASSWORD : " p
@@ -68,8 +66,7 @@ fun_create() {
     if [[ "$ch" == "y" || "$ch" == "Y" ]]; then
         read -p " DATE (YYYY-MM-DD): " d
         read -p " TIME (HH:MM): " t; [[ -z "$t" ]] && t="00:00"
-    else d="NEVER"; t="00:00"
-    fi
+    else d="NEVER"; t="00:00"; fi
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
     echo "$u|$d|$t|V63" >> "$USER_DB"
@@ -84,11 +81,9 @@ fun_create() {
 }
 
 fun_list() {
-    clear; echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${YELLOW}              USER LIST                   ${NC}"
-    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    clear; echo -e "${BLUE}=== USER LIST ===${NC}"
     printf "${PURPLE}%-15s | %-12s | %-5s${NC}\n" "USER" "DATE" "ST"
-    echo "------------------------------------------"
+    echo "----------------------------------------"
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
         st=$(check_status_cli "$u"); printf "%-15s | %-12s | %b\n" "$u" "$d" "$st"
@@ -97,7 +92,7 @@ fun_list() {
 
 fun_settings() {
     clear; echo -e "${BLUE}=== SETTINGS ===${NC}"
-    echo " [1] INSTALL / UPDATE BOT"
+    echo " [1] INSTALL / UPDATE BOT (FIX ERRORS)"
     echo " [2] FIX TIMEZONE"
     echo " [0] BACK"
     read -p " OPTION: " s
@@ -109,23 +104,25 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V63)
+#  🤖 BOT INSTALLER (V63 - CRITICAL FIX)
 # ==================================================
 fun_install_bot() {
-    clear; echo -e "${YELLOW}INSTALLING BOT V63 (FINAL VERSION)...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT V63 (FIXING DEBIAN ERROR)...${NC}"
     
     # 1. Config
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
 
-    # 2. Dependencies (Fixes PEP 668 Error)
+    # 2. Dependencies (THE FIX IS HERE)
     echo ">> Installing Libraries..."
     if [[ "$OS" == "debian" ]]; then apt-get update -y; apt-get install python3-pip -y; else yum install python3-pip -y; fi
-    pip3 install python-telegram-bot==13.15 schedule --break-system-packages >/dev/null 2>&1
+    
+    # --- FORCE INSTALL ON DEBIAN 12 ---
+    pip3 install python-telegram-bot==13.15 schedule --force-reinstall --break-system-packages >/dev/null 2>&1
 
-    # 3. Create Service File (Fixes Unit Not Found)
-    echo ">> Configuring Service..."
+    # 3. Create Service FIRST
+    echo ">> Creating Service..."
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
 Description=SSH Bot V63
@@ -170,14 +167,6 @@ def get_status(u):
     except: pass
     return "🔴"
 
-# --- SERVER STATS ---
-def get_sys_info():
-    try:
-        ram = subprocess.getoutput("free -m | awk 'NR==2{printf \"%.1f%%\", $3*100/$2 }'")
-        cpu = subprocess.getoutput("top -bn1 | grep load | awk '{printf \"%.1f\", $(NF-2)}'")
-        return f"💾 RAM: {ram} | ⚙️ CPU: {cpu}"
-    except: return "System Check Error"
-
 def get_main_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👤 ADD USER", callback_data='add')],
@@ -218,7 +207,6 @@ def btn(update: Update, context: CallbackContext):
             context.user_data['act'] = 'l1'
             query.edit_message_text("🔒 *ENTER USERNAME:*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         
-        # --- PERFECT ALIGNMENT LIST ---
         elif data == 'list':
             header = "➖➖➖➖➖➖➖➖➖➖➖➖\n       ALL USERS LIST\n➖➖➖➖➖➖➖➖➖➖➖➖\n"
             body = ""
@@ -227,22 +215,16 @@ def btn(update: Update, context: CallbackContext):
                     for l in f:
                         parts = l.split('|')
                         if len(parts) < 2: continue
-                        u = parts[0][:10]
-                        d = parts[1]
+                        u = parts[0][:10]; d = parts[1]
                         if not u.strip(): continue
-                        
-                        if d == "NEVER": exp = "No Expiry"
-                        else: exp = d
-                        
+                        exp = "No Expiry" if d == "NEVER" else d
                         st = get_status(u)
-                        # Name (10) | Status (icon) | Expiry
                         body += f"{u:<10} | {st} | {exp}\n"
             
             if not body: body = "No Users Found"
             msg = header + f"```\n{body}```" + "➖➖➖➖➖➖➖➖➖➖➖➖"
             query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             
-        # --- PERFECT ALIGNMENT MONITOR ---
         elif data == 'onl':
             header = "➖➖➖➖➖➖➖➖➖➖➖➖\n       ONLINE MONITOR\n➖➖➖➖➖➖➖➖➖➖➖➖\n"
             body = ""
@@ -252,7 +234,6 @@ def btn(update: Update, context: CallbackContext):
                         u = l.split('|')[0]
                         if not u.strip(): continue
                         st = get_status(u)
-                        # Name (10) : Icon
                         body += f"{u:<10} :    {st}\n"
             
             if not body: body = "No Users Found"
@@ -265,9 +246,8 @@ def btn(update: Update, context: CallbackContext):
             query.edit_message_text("✅ *SAVED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
 
         elif data == 'set':
-            sys_info = get_sys_info()
             kb = [[InlineKeyboardButton("UPDATE BOT", callback_data='ins'), InlineKeyboardButton("FIX TIMEZONE", callback_data='tz')], [InlineKeyboardButton("BACK", callback_data='back')]]
-            query.edit_message_text(f"⚙️ *SETTINGS*\n{sys_info}", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
+            query.edit_message_text("⚙️ *SETTINGS*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
         
         elif data == 'ins':
             query.edit_message_text("⚠️ USE OPTION [8] IN TERMINAL", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
@@ -293,8 +273,6 @@ def create_user_final(update, context, d, t):
             with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{t}|Bot\n")
             
             exp_txt = "No date or time" if d == "NEVER" else f"Expiry: {d}\nTime: {t}"
-            
-            # --- COPYABLE BOX ---
             msg = f"""✅ *USER CREATED SUCCESSFULY*
 ━━━━━━━━━━━━━━━━━━━━
 User: {u}
