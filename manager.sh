@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V28.4 (LITE EDITION) 🚀
-#  - INTERFACE: CLASSIC V28.4 MENU
-#  - BOT ENGINE: V50 (ACTIVE)
-#  - PROTECTION: REMOVED (NO MONITOR)
+#  SSH MANAGER V28.5 (DESIGN + BOT SYNC) 🚀
+#  - INTERFACE: TABLE DESIGN (MATCHING IMAGE)
+#  - BOT: SYNCHRONIZED WITH TERMINAL STATUS
+#  - MONITOR: REMOVED (LITE VERSION)
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -25,16 +25,11 @@ NC='\033[0m'
 mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
-# ==================================================
-#  (تم حذف نظام المراقبة والحماية من هنا)
-# ==================================================
-# تم إيقاف: kp_monitor.sh
-# تم إيقاف: فحص تعدد الدخول (Multi-Login)
-# تم إيقاف: الحذف التلقائي عند الانتهاء
+# إيقاف المراقبة القديمة
 pkill -f kp_monitor.sh 2>/dev/null
 
 # ==================================================
-#  FUNCTIONS (V28.4 STYLE)
+#  FUNCTIONS
 # ==================================================
 
 pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
@@ -106,36 +101,51 @@ fun_lock() {
     pause
 }
 
+# --- LIST ACCOUNTS (DESIGN UPDATE) ---
 fun_list() {
     clear
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${YELLOW}               [05] LIST ACCOUNTS                 ${NC}"
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${WHITE}USER           | DATE       | TIME  | STATUS${NC}"
-    echo -e "${CYAN}--------------------------------------------------${NC}"
+    echo -e "${CYAN}╔══════════════════════════════╦══════════════════╗${NC}"
+    echo -e "${CYAN}║${WHITE}  Username                    ${CYAN}║${WHITE}  Status          ${CYAN}║${NC}"
+    echo -e "${CYAN}╠══════════════════════════════╬══════════════════╣${NC}"
+    
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
-        if pgrep -f "sshd: $u " >/dev/null || pgrep -u "$u" "dropbear" >/dev/null; then st="${GREEN}ONLINE 🟢${NC}"
-        elif passwd -S "$u" | grep -q " L "; then st="${RED}LOCKED ⛔${NC}"
-        else st="${RED}OFFLINE${NC}"; fi
-        printf "${YELLOW}%-14s ${NC}| %-10s | %-5s | %b\n" "$u" "$d" "$t" "$st"
+        
+        # Check Status
+        if pgrep -f "sshd: $u " >/dev/null || pgrep -u "$u" "dropbear" >/dev/null; then
+            st="${GREEN}ONLINE${NC}"
+            col="${GREEN}"
+        elif passwd -S "$u" | grep -q " L "; then
+            st="${RED}LOCKED${NC}"
+            col="${RED}"
+        else
+            st="${RED}OFFLINE${NC}"
+            col="${CYAN}" # User name color for offline
+        fi
+        
+        printf "${CYAN}║ ${col}%-28s ${CYAN}║  %-14b  ${CYAN}║${NC}\n" "$u" "$st"
     done < "$USER_DB"
+    
+    echo -e "${CYAN}╚══════════════════════════════╩══════════════════╝${NC}"
     pause
 }
 
+# --- CHECK STATUS (DESIGN UPDATE) ---
 fun_online() {
     clear
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${GREEN}               [06] CHECK STATUS                  ${NC}"
-    echo -e "${BLUE}==================================================${NC}"
-    echo -e "${WHITE}USER           | STATUS${NC}"
-    echo -e "${CYAN}--------------------------------------------------${NC}"
+    echo -e "${CYAN}╔══════════════════════════════╦══════════════════╗${NC}"
+    echo -e "${CYAN}║${WHITE}  Username                    ${CYAN}║${WHITE}  Status          ${CYAN}║${NC}"
+    echo -e "${CYAN}╠══════════════════════════════╬══════════════════╣${NC}"
+    
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
+        
         if pgrep -f "sshd: $u " >/dev/null || pgrep -u "$u" "dropbear" >/dev/null; then
-            printf "${YELLOW}%-14s ${NC}| ${GREEN}ONLINE 🟢${NC}\n" "$u"
+             printf "${CYAN}║ ${GREEN}%-28s ${CYAN}║  ${GREEN}ONLINE          ${CYAN}║${NC}\n" "$u"
         fi
     done < "$USER_DB"
+    
+    echo -e "${CYAN}╚══════════════════════════════╩══════════════════╝${NC}"
     pause
 }
 
@@ -148,7 +158,7 @@ fun_save() {
     echo -e "${GREEN}✅ DATA BACKED UP!${NC}"; pause
 }
 
-# --- 🤖 BOT INSTALLATION (V50 ENGINE) ---
+# --- 🤖 BOT INSTALLATION (UPDATED LOGIC) ---
 fun_install_bot() {
     clear
     echo -e "${BLUE}========================${NC}"
@@ -165,7 +175,7 @@ fun_install_bot() {
     systemctl stop sshbot >/dev/null 2>&1
     rm -f /root/ssh_bot.py
 
-    # 3. Write Bot
+    # 3. Write Bot (UPDATED TO MATCH TERMINAL OUTPUT)
     cat > /root/ssh_bot.py << 'EOF'
 import logging, os, subprocess, threading, time, datetime
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
@@ -185,10 +195,21 @@ def run_cmd(c):
     try: subprocess.run(c, shell=True, check=True); return True
     except: return False
 
-def get_status(u):
-    if subprocess.getoutput(f"pgrep -f 'sshd: {u} '") or subprocess.getoutput(f"pgrep -u {u} dropbear"): return "ONLINE 🟢"
-    if " L " in subprocess.getoutput(f"passwd -S {u}"): return "LOCKED ⛔"
-    return "OFFLINE 🔴"
+def get_status_raw(u):
+    # This function checks status exactly like the bash script
+    try:
+        # Check SSHD and Dropbear
+        c1 = subprocess.getoutput(f"pgrep -f 'sshd: {u} '")
+        c2 = subprocess.getoutput(f"pgrep -u {u} dropbear")
+        if c1 or c2: return "ONLINE"
+        
+        # Check Lock
+        c3 = subprocess.getoutput(f"passwd -S {u}")
+        if " L " in c3: return "LOCKED"
+        
+        return "OFFLINE"
+    except:
+        return "OFFLINE"
 
 # KEYBOARDS
 def main_kb():
@@ -203,7 +224,7 @@ def back_kb(): return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", c
 def start(update: Update, context: CallbackContext):
     if update.effective_user.id != ADMIN_ID: return
     context.user_data.clear()
-    update.message.reply_text("*⚡ SSH MANAGER V28.4 BOT (NO-MONITOR)*", parse_mode=ParseMode.MARKDOWN, reply_markup=main_kb())
+    update.message.reply_text("*⚡ SSH MANAGER V28.5 BOT*", parse_mode=ParseMode.MARKDOWN, reply_markup=main_kb())
     return ConversationHandler.END
 
 def menu_cb(update: Update, context: CallbackContext):
@@ -214,7 +235,7 @@ def menu_cb(update: Update, context: CallbackContext):
     
     if d == 'menu':
         context.user_data.clear()
-        q.edit_message_text("*⚡ SSH MANAGER V28.4 BOT (NO-MONITOR)*", parse_mode=ParseMode.MARKDOWN, reply_markup=main_kb())
+        q.edit_message_text("*⚡ SSH MANAGER V28.5 BOT*", parse_mode=ParseMode.MARKDOWN, reply_markup=main_kb())
         return ConversationHandler.END
         
     elif d == 'add': q.edit_message_text("👤 ENTER USERNAME:", reply_markup=back_kb()); return WAIT_U_ADD
@@ -223,7 +244,6 @@ def menu_cb(update: Update, context: CallbackContext):
     elif d == 'lock': q.edit_message_text("🔒 ENTER USERNAME:", reply_markup=back_kb()); return WAIT_U_DEL
     
     elif d == 'list':
-        # Threading prevents freeze on large lists
         threading.Thread(target=do_list, args=(update, q)).start()
         
     elif d == 'onl':
@@ -232,22 +252,47 @@ def menu_cb(update: Update, context: CallbackContext):
     return ConversationHandler.END
 
 def do_list(update, q):
-    msg = "USER | EXPIRY\n------------------\n"
+    # Matches the Terminal "LIST" view (Username + Status)
+    msg = "👤 *USERNAME* | 📊 *STATUS*\n"
+    msg += "➖➖➖➖➖➖➖➖➖➖\n"
+    
+    count = 0
     if os.path.exists(DB_FILE):
         with open(DB_FILE) as f:
             for l in f:
                 p = l.strip().split('|')
-                if len(p)>=2: msg += f"`{p[0]:<10}` | {p[1]}\n"
+                if len(p) >= 2:
+                    u = p[0]
+                    st = get_status_raw(u)
+                    
+                    # Icons for status
+                    if st == "ONLINE": icon = "🟢 ONLINE"
+                    elif st == "LOCKED": icon = "⛔ LOCKED"
+                    else: icon = "🔴 OFFLINE"
+                    
+                    # Formatting with Monospace for alignment
+                    msg += f"`{u:<12}` | {icon}\n"
+                    count += 1
+    
+    if count == 0: msg = "❌ NO USERS FOUND"
     q.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=back_kb())
 
 def do_onl(update, q):
-    msg = "USER | STATUS\n------------------\n"
+    # Matches the Terminal "ONLINE" view
+    msg = "👤 *ONLINE USERS*\n"
+    msg += "➖➖➖➖➖➖➖➖➖➖\n"
+    
+    count = 0
     if os.path.exists(DB_FILE):
         with open(DB_FILE) as f:
             for l in f:
                 u = l.strip().split('|')[0]
-                st = get_status(u)
-                if "ONLINE" in st: msg += f"`{u:<10}` | {st}\n"
+                st = get_status_raw(u)
+                if st == "ONLINE":
+                    msg += f"🟢 `{u}`\n"
+                    count += 1
+    
+    if count == 0: msg += "🔴 NO ONE IS ONLINE"
     q.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=back_kb())
 
 # ADD FLOW
@@ -372,7 +417,6 @@ fun_settings() {
     echo -e "${YELLOW}      [08] SETTINGS     ${NC}"
     echo -e "${BLUE}========================${NC}"
     echo " [1] FIX TIMEZONE (TUNISIA)"
-    # Option 2 removed (Monitor)
     echo " [3] RESTART SSH SERVICE"
     echo " [4] VIEW LOGS"
     echo -e "${GREEN} [5] INSTALL BOT (Telegram)${NC}"
@@ -380,7 +424,6 @@ fun_settings() {
     read -p " SELECT: " s
     case "$s" in
         1) timedatectl set-timezone Africa/Tunis; echo "DONE.";;
-        # 2) removed
         3) service "$SSH_SERVICE" restart; echo "SSH RESTARTED.";;
         4) echo ""; tail -n 10 "$LOG_FILE";;
         5) fun_install_bot ;;
@@ -391,10 +434,9 @@ fun_settings() {
 # --- MAIN MENU ---
 while true; do
     clear
-    # تم حذف تشغيل المراقبة من هنا
 
     echo -e "${BLUE}========================${NC}"
-    echo -e "${WHITE}  SSH MANAGER (V28.4)   ${NC}"
+    echo -e "${WHITE}  SSH MANAGER (V28.5)   ${NC}"
     echo -e "${WHITE}  OS: ${YELLOW}${OS^^}${NC}"
     echo -e "${BLUE}========================${NC}"
     echo -e "${GREEN} [01] ADD ACCOUNT${NC}"
