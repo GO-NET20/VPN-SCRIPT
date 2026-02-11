@@ -1,10 +1,9 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V65 (UNIVERSAL OS EDITION) 🌍
-#  - SUPPORTS: Ubuntu, Debian, CentOS, Alma, Rocky 🖥️
-#  - ENGINE: AUTO-DETECT PACKAGE MANAGER (APT/YUM/DNF) ⚙️
-#  - PYTHON: SMART PIP INSTALLER (AUTO-FIX PEP668) 🐍
-#  - UI: SAME PERFECT DESIGN & COPYABLE BOXES ✅
+#  SSH MANAGER V65 (UNIVERSAL & COPYABLE UI) 🌍
+#  - OS SUPPORT: Ubuntu, Debian, CentOS, Fedora, Rocky 🖥️
+#  - ENGINE: Auto-detects Package Manager (APT/YUM/DNF) ⚙️
+#  - UI: New "Account" Design with Copyable Text 📋
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -13,28 +12,22 @@ export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS=$ID
-    VERSION=$VERSION_ID
 else
     echo "❌ UNSUPPORTED OS"; exit 1
 fi
 
-# Detect Package Manager & Service Name
-if [[ "$OS" == "ubuntu" || "$OS" == "debian" || "$OS" == "kali" ]]; then
+# Detect Package Manager
+if [[ "$OS" == "ubuntu" || "$OS" == "debian" || "$OS" == "kali" || "$OS" == "linuxmint" ]]; then
     CMD="apt-get update -y && apt-get install -y"
-    SSH_SERVICE="ssh"
     PKG_MGR="apt"
 elif [[ "$OS" == "centos" || "$OS" == "rhel" || "$OS" == "almalinux" || "$OS" == "rocky" ]]; then
     CMD="yum install -y"
-    SSH_SERVICE="sshd"
     PKG_MGR="yum"
 elif [[ "$OS" == "fedora" ]]; then
     CMD="dnf install -y"
-    SSH_SERVICE="sshd"
     PKG_MGR="dnf"
 else
-    echo "⚠️ UNKNOWN DISTRO. DEFAULTING TO APT."
-    CMD="apt-get install -y"
-    SSH_SERVICE="sshd"
+    CMD="apt-get install -y" # Default fallback
 fi
 
 # --- CONFIG ---
@@ -43,7 +36,7 @@ BOT_CONF="/etc/xpanel/bot.conf"
 LOG_FILE="/var/log/kp_manager.log"
 BACKUP_DIR="/root/backups"
 
-# --- CREDENTIALS (AUTO) ---
+# --- CREDENTIALS ---
 MY_TOKEN="8275679858:AAGCTP9tsJzCgzXXzgA9hJQ8ooqhlFY8BcA"
 MY_ID="7587310857"
 
@@ -69,7 +62,6 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 
 check_status_cli() {
     local u=$1
-    # Universal check for both SSH and Dropbear
     if ps -ef | grep "sshd: $u" | grep -v grep | grep -qE "@| "; then echo -e "🟢"
     elif pgrep -u "$u" dropbear >/dev/null; then echo -e "🟢"
     elif passwd -S "$u" 2>/dev/null | grep -q " L "; then echo -e "⛔"
@@ -117,7 +109,7 @@ fun_list() {
 
 fun_settings() {
     clear; echo -e "${BLUE}=== SETTINGS ===${NC}"
-    echo -e " detected os: ${GREEN}$OS $VERSION${NC}"
+    echo -e " SYSTEM: ${GREEN}$OS${NC} | MANAGER: ${GREEN}$PKG_MGR${NC}"
     echo " [1] INSTALL / UPDATE BOT"
     echo " [2] FIX TIMEZONE"
     echo " [0] BACK"
@@ -133,27 +125,23 @@ fun_settings() {
 #  🤖 BOT INSTALLER (UNIVERSAL)
 # ==================================================
 fun_install_bot() {
-    clear; echo -e "${YELLOW}INSTALLING BOT ON ($OS)...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT ON $OS...${NC}"
     
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
 
-    # --- 1. UNIVERSAL DEPENDENCY INSTALLER ---
-    echo ">> Installing Python & Pip using $PKG_MGR..."
+    # 1. Install System Dependencies
+    echo ">> Installing Python & Tools..."
     eval "$CMD python3 python3-pip" >/dev/null 2>&1
-    
-    # Also install sudo/wget if missing
     if ! command -v sudo &> /dev/null; then eval "$CMD sudo"; fi
 
-    # --- 2. SMART PIP INSTALLER ---
-    echo ">> Installing Python Libraries..."
-    # Try installing normally first
+    # 2. Install Python Libs (Smart Mode)
+    echo ">> Installing Bot Libraries..."
     if pip3 install python-telegram-bot==13.15 schedule >/dev/null 2>&1; then
-        echo -e "${GREEN}✔ Pip installed normally.${NC}"
+        echo -e "${GREEN}✔ Installed successfully.${NC}"
     else
-        echo -e "${YELLOW}⚠ Triggering PEP668 Fix...${NC}"
-        # If failed, force break system packages (For Debian 12/Ubuntu 23+)
+        echo -e "${YELLOW}⚠ Using system-break method (Debian 12/Ubuntu 24)...${NC}"
         pip3 install python-telegram-bot==13.15 schedule --break-system-packages --force-reinstall >/dev/null 2>&1
     fi
 
@@ -170,7 +158,7 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-    # 4. Bot Code
+    # 4. Bot Code (Updated UI)
     cat > /root/ssh_bot.py << 'EOF'
 import logging, os, subprocess, re
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
@@ -195,7 +183,7 @@ def get_status(u):
     try:
         cmd = f"ps -ef | grep 'sshd: {u}' | grep -v grep"
         out = subprocess.getoutput(cmd)
-        if out and (re.search(f"sshd: {u}\\b", out) or re.search(f"sshd: {u}@", out)): return "🟢"
+        if out and "sshd:" in out: return "🟢"
         if subprocess.getoutput(f"pgrep -u {u} dropbear"): return "🟢"
         if " L " in subprocess.getoutput(f"passwd -S {u}"): return "⛔"
     except: pass
@@ -305,14 +293,16 @@ def create_user_final(update, context, d, t):
             with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{t}|Bot\n")
             
             exp_txt = "No date or time" if d == "NEVER" else f"Expiry: {d}\nTime: {t}"
-            msg = f"""✅ *USER CREATED SUCCESSFULY*
+            
+            # --- NEW DESIGN AS REQUESTED ---
+            msg = f"""Account 
 ━━━━━━━━━━━━━━━━━━━━
-User: {u}
-Pass: {p}
+User: `{u}`
+Pass: `{p}`
 {exp_txt}
 ━━━━━━━━━━━━━━━━━━━━
-📋 *CLICK TO COPY:*
-`{u}:{p}`"""
+`{u}:{p}`
+━━━━━━━━━━━━━━━━━━━━"""
             
             if update.callback_query: update.callback_query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             else: update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
