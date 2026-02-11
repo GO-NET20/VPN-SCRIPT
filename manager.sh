@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V60 (STABILITY FIX) 🚀
-#  - FIXED: BOT UNRESPONSIVE BUTTONS ✅
-#  - FIXED: REMOVED ASYNC ISSUES ✅
-#  - UI: COPYABLE BOXES & ALIGNMENT ✅
+#  SSH MANAGER V61 (UI & SETTINGS UPGRADE) 🚀
+#  - NEW: SERVER STATUS MONITOR IN SETTINGS 📊
+#  - UI: CLEANER TABLES & HEADERS 📋
+#  - FIXED: ALIGNMENT ISSUES IN LISTS ✅
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -69,7 +69,7 @@ fun_create() {
     else d="NEVER"; t="00:00"; fi
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V60" >> "$USER_DB"
+    echo "$u|$d|$t|V61" >> "$USER_DB"
     clear; echo -e "${GREEN}✅ CREATED${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " User : $u"
@@ -92,7 +92,7 @@ fun_list() {
 
 fun_settings() {
     clear; echo -e "${BLUE}=== SETTINGS ===${NC}"
-    echo " [1] INSTALL / UPDATE BOT (FIX ERRORS)"
+    echo " [1] INSTALL / UPDATE BOT"
     echo " [2] FIX TIMEZONE"
     echo " [0] BACK"
     read -p " OPTION: " s
@@ -104,30 +104,26 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V60 - RESPONSIVE FIX)
+#  🤖 BOT INSTALLER (V61)
 # ==================================================
 fun_install_bot() {
-    clear; echo -e "${YELLOW}INSTALLING BOT V60 (STABILITY FIX)...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT V61 (UI UPGRADE)...${NC}"
     
     # 1. Config
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
 
-    # 2. Dependencies (FORCE REINSTALL 13.15)
-    echo ">> Installing Python Libraries..."
+    # 2. Dependencies
+    echo ">> Checking Libraries..."
     if [[ "$OS" == "debian" ]]; then apt-get update -y; apt-get install python3-pip -y; else yum install python3-pip -y; fi
-    
-    # Clean old versions first
-    pip3 uninstall python-telegram-bot -y >/dev/null 2>&1
-    # Install specific stable version
     pip3 install python-telegram-bot==13.15 schedule --break-system-packages >/dev/null 2>&1
 
-    # 3. Create Service
-    echo ">> Creating Service File..."
+    # 3. Service
+    echo ">> Configuring Service..."
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
-Description=SSH Bot V60
+Description=SSH Bot V61
 After=network.target
 [Service]
 ExecStart=/usr/bin/python3 /root/ssh_bot.py
@@ -137,14 +133,13 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-    # 4. Bot Code (FIXED HANDLERS)
+    # 4. Bot Code
     echo ">> Writing Bot Logic..."
     cat > /root/ssh_bot.py << 'EOF'
 import logging, os, subprocess, re
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 
-# Enable logging
 logging.basicConfig(format='%(asctime)s - %(name)s - %(levelname)s - %(message)s', level=logging.INFO)
 logger = logging.getLogger(__name__)
 
@@ -171,94 +166,131 @@ def get_status(u):
     except: pass
     return "🔴"
 
+# --- SYSTEM STATUS FUNCTION ---
+def get_sys_status():
+    try:
+        # RAM
+        ram = subprocess.getoutput("free -m | awk 'NR==2{printf \"%.2f%%\", $3*100/$2 }'")
+        # CPU
+        cpu = subprocess.getoutput("top -bn1 | grep load | awk '{printf \"%.2f\", $(NF-2)}'")
+        # DISK
+        disk = subprocess.getoutput("df -h / | awk 'NR==2{print $5}'")
+        # UPTIME
+        upt = subprocess.getoutput("uptime -p").replace("up ", "")
+        
+        return f"""📊 *SERVER STATUS*
+━━━━━━━━━━━━━━━━━━━━
+💾 RAM  : `{ram}`
+⚙️ CPU  : `{cpu}`
+💿 DISK : `{disk}`
+⏳ TIME : `{upt}`
+━━━━━━━━━━━━━━━━━━━━"""
+    except: return "⚠️ Error getting stats"
+
 def get_main_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👤 ADD USER", callback_data='add')],
-        [InlineKeyboardButton("🔄 RENEW USER", callback_data='ren')],
-        [InlineKeyboardButton("🗑️ REMOVE USER", callback_data='del')],
+        [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ REMOVE", callback_data='del')],
         [InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock')],
-        [InlineKeyboardButton("📋 SHOW ALL USERS", callback_data='list')],
-        [InlineKeyboardButton("🟢 CHECK ONLINE", callback_data='onl')],
-        [InlineKeyboardButton("💾 SAVE DATA", callback_data='bak')],
-        [InlineKeyboardButton("⚙️ SETTINGS", callback_data='set')]
+        [InlineKeyboardButton("📋 ALL USERS", callback_data='list'), InlineKeyboardButton("🟢 ONLINE", callback_data='onl')],
+        [InlineKeyboardButton("💾 BACKUP DB", callback_data='bak')],
+        [InlineKeyboardButton("⚙️ SETTINGS & TOOLS", callback_data='set')]
     ])
 
 def start(update: Update, context: CallbackContext):
     if update.effective_user.id != ADMIN_ID: return
-    update.message.reply_text("Panel SSH MANAGER", reply_markup=get_main_menu())
+    update.message.reply_text("⚡ *SSH MANAGER V61*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
 
 def btn(update: Update, context: CallbackContext):
     query = update.callback_query
     query.answer()
     data = query.data
     
-    # IMPORTANT: Removed run_async, using direct execution
     try:
         if data == 'back':
-            query.edit_message_text("Panel SSH MANAGER", reply_markup=get_main_menu())
+            query.edit_message_text("⚡ *SSH MANAGER V61*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
             return
 
         if data == 'add':
             context.user_data['act'] = 'a1'
-            query.edit_message_text("👤 ENTER USERNAME:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            query.edit_message_text("👤 *ENTER USERNAME:*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             
         elif data == 'ren':
             context.user_data['act'] = 'r1'
-            query.edit_message_text("🔄 ENTER USERNAME:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            query.edit_message_text("🔄 *ENTER USERNAME TO RENEW:*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             
         elif data == 'del':
             context.user_data['act'] = 'd1'
-            query.edit_message_text("🗑️ ENTER USERNAME:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            query.edit_message_text("🗑️ *ENTER USERNAME TO DELETE:*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             
         elif data == 'lock':
             context.user_data['act'] = 'l1'
-            query.edit_message_text("🔒 ENTER USERNAME:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            query.edit_message_text("🔒 *ENTER USERNAME TO LOCK:*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         
+        # --- IMPROVED LIST VIEW ---
         elif data == 'list':
-            header = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n      📋 ALL USERS LIST\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nUsername       | Status | Expiry\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            header = "📋 *ALL USERS LIST*\n━━━━━━━━━━━━━━━━━━━━\n"
             body = ""
             if os.path.exists(DB_FILE):
                 with open(DB_FILE) as f:
                     for l in f:
                         parts = l.split('|')
                         if len(parts) < 2: continue
-                        u = parts[0]; d = parts[1]
-                        if not u.strip(): continue
-                        body += f"{u:<14} |   {get_status(u)}  | {d}\n"
-            msg = header + f"```\n{body}```" + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                        u = parts[0][:12] # Limit name length
+                        d = parts[1]
+                        st = get_status(parts[0])
+                        body += f"`{u:<12}` {st} `{d}`\n"
+            if not body: body = "⚠️ NO USERS FOUND"
+            msg = header + body + "━━━━━━━━━━━━━━━━━━━━"
             query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             
+        # --- IMPROVED ONLINE VIEW ---
         elif data == 'onl':
-            header = "━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n      📊 LIVE STATUS MONITOR\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\nUsername            Status\n━━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+            header = "🟢 *ONLINE MONITOR*\n━━━━━━━━━━━━━━━━━━━━\n"
             body = ""
+            count = 0
             if os.path.exists(DB_FILE):
                 with open(DB_FILE) as f:
                     for l in f:
                         u = l.split('|')[0]
                         if not u.strip(): continue
-                        body += f"{u:<15} :    {get_status(u)}\n"
-            msg = header + f"```\n{body}```" + "━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
+                        st = get_status(u)
+                        if "🟢" in st:
+                            body += f"👤 `{u}` : {st}\n"
+                            count += 1
+            if count == 0: body = "🔴 *NO USERS ONLINE*"
+            msg = header + body + "━━━━━━━━━━━━━━━━━━━━"
             query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
 
         elif data == 'bak':
             if os.path.exists(DB_FILE):
                 context.bot.send_document(chat_id=ADMIN_ID, document=open(DB_FILE, 'rb'))
-            query.edit_message_text("✅ DATABASE SAVED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            query.edit_message_text("✅ *DATABASE SAVED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
 
+        # --- IMPROVED SETTINGS MENU ---
         elif data == 'set':
-            query.edit_message_text("SETTINGS MENU", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("INSTALL / UPDATE BOT", callback_data='ins'), InlineKeyboardButton("FIX TIMEZONE", callback_data='tz')], [InlineKeyboardButton("BACK", callback_data='back')]]))
+            kb = [
+                [InlineKeyboardButton("📊 SYSTEM STATUS", callback_data='sys')],
+                [InlineKeyboardButton("🌍 FIX TIMEZONE", callback_data='tz')],
+                [InlineKeyboardButton("🔄 UPDATE BOT", callback_data='ins')],
+                [InlineKeyboardButton("🔙 BACK", callback_data='back')]
+            ]
+            query.edit_message_text("⚙️ *SETTINGS DASHBOARD*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
+        
+        elif data == 'sys':
+            stats = get_sys_status()
+            query.edit_message_text(stats, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='set')]]))
         
         elif data == 'ins':
-            query.edit_message_text("⚠️ RUN OPTION [8]->[1] IN SSH CLI", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            query.edit_message_text("⚠️ *PLEASE RUN OPTION [8]->[1] IN TERMINAL*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         
         elif data == 'tz':
             subprocess.run("timedatectl set-timezone Africa/Tunis", shell=True)
-            query.edit_message_text("🌍 DONE", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            query.edit_message_text("🌍 *TIMEZONE SET TO TUNISIA*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         
-        # --- FIX: EXPIRY BUTTONS ---
         elif data == 'exp_yes':
             context.user_data['act'] = 'a_date'
-            query.edit_message_text("📅 ENTER DATE (YYYY-MM-DD):", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            query.edit_message_text("📅 *ENTER DATE (YYYY-MM-DD):*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         
         elif data == 'exp_no':
             create_user_final(update, context, "NEVER", "00:00")
@@ -275,26 +307,25 @@ def create_user_final(update, context, d, t):
             subprocess.run(f"echo '{u}:{p}' | chpasswd", shell=True)
             with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{t}|Bot\n")
             
-            exp_info = f"Expiry date : {d}\ntime : {t}" if d != "NEVER" else "No date or time"
-            msg = f"""✅ *USER CREATED!*
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-User : `{u}`
-Pass : `{p}`
+            exp_info = f"📅 Expiry: `{d}`\n⏰ Time: `{t}`" if d != "NEVER" else "♾️ Expiry: `NEVER`"
+            msg = f"""✅ *USER CREATED SUCCESSFULLY*
+━━━━━━━━━━━━━━━━━━━━
+👤 User: `{u}`
+🔑 Pass: `{p}`
 {exp_info}
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-`{u}:{p}`
-━━━━━━━━━━━━━━━━━━━━━━━━━━━━"""
+━━━━━━━━━━━━━━━━━━━━
+*📋 CLICK TO COPY:*
+`{u}:{p}`"""
             
-            # Send message depending on context (Button or Text)
             if update.callback_query:
                 update.callback_query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             else:
                 update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         else:
             if update.callback_query:
-                update.callback_query.edit_message_text("❌ EXISTS", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+                update.callback_query.edit_message_text("❌ *USER ALREADY EXISTS*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             else:
-                update.message.reply_text("❌ EXISTS", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+                update.message.reply_text("❌ *USER ALREADY EXISTS*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
     except Exception as e:
         logger.error(f"Error in create: {e}")
 
@@ -306,19 +337,19 @@ def txt(update: Update, context: CallbackContext):
     try:
         if act == 'a1':
             if not msg.isalnum():
-                update.message.reply_text("❌ A-Z, 0-9 ONLY")
+                update.message.reply_text("❌ *LETTERS & NUMBERS ONLY*", parse_mode=ParseMode.MARKDOWN)
                 return
             context.user_data.update({'nu': msg, 'act': 'a2'})
-            update.message.reply_text("🔑 ENTER PASSWORD:", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            update.message.reply_text("🔑 *ENTER PASSWORD:*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         
         elif act == 'a2':
             context.user_data.update({'np': msg})
-            kb = [[InlineKeyboardButton("YES", callback_data='exp_yes'), InlineKeyboardButton("NO", callback_data='exp_no')], [InlineKeyboardButton("BACK", callback_data='back')]]
-            update.message.reply_text("📅 SET EXPIRY DATE?", reply_markup=InlineKeyboardMarkup(kb))
+            kb = [[InlineKeyboardButton("✅ YES", callback_data='exp_yes'), InlineKeyboardButton("♾️ NO (UNLIMITED)", callback_data='exp_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]]
+            update.message.reply_text("📅 *SET EXPIRY DATE?*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
         
         elif act == 'a_date':
             context.user_data.update({'nd': msg, 'act': 'a_time'})
-            update.message.reply_text("⏰ ENTER TIME (HH:MM):", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            update.message.reply_text("⏰ *ENTER TIME (HH:MM):*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         
         elif act == 'a_time':
             d = context.user_data['nd']
@@ -327,7 +358,7 @@ def txt(update: Update, context: CallbackContext):
             
         elif act == 'r1':
             context.user_data.update({'ru': msg, 'act': 'r2'})
-            update.message.reply_text("📅 NEW DATE (YYYY-MM-DD):", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            update.message.reply_text("📅 *NEW EXPIRY DATE (YYYY-MM-DD):*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             
         elif act == 'r2':
             u = context.user_data['ru']
@@ -336,7 +367,7 @@ def txt(update: Update, context: CallbackContext):
             lines = [l for l in open(DB_FILE) if not l.startswith(f"{u}|")]
             lines.append(f"{u}|{d}|23:59|Renew\n")
             with open(DB_FILE, 'w') as f: f.writelines(lines)
-            update.message.reply_text("✅ RENEWED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            update.message.reply_text(f"✅ *{u} RENEWED UNTIL {d}*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             
         elif act == 'd1':
             u = msg
@@ -344,19 +375,18 @@ def txt(update: Update, context: CallbackContext):
             subprocess.run(f"userdel -f -r {u}", shell=True)
             lines = [l for l in open(DB_FILE) if not l.startswith(f"{u}|")]
             with open(DB_FILE, 'w') as f: f.writelines(lines)
-            update.message.reply_text("🗑 DELETED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            update.message.reply_text(f"🗑️ *{u} DELETED*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             
         elif act == 'l1':
             u = msg
             subprocess.run(f"usermod -L {u}", shell=True)
             subprocess.run(f"pkill -KILL -u {u}", shell=True)
-            update.message.reply_text("⛔ LOCKED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            update.message.reply_text(f"⛔ *{u} LOCKED*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
 
     except Exception as e:
         logger.error(f"Error in txt: {e}")
 
 def main():
-    # Removed run_async from handlers to ensure compatibility and stability
     up = Updater(TOKEN, use_context=True)
     up.dispatcher.add_handler(CommandHandler("start", start))
     up.dispatcher.add_handler(CallbackQueryHandler(btn))
@@ -367,18 +397,17 @@ def main():
 if __name__ == '__main__': main()
 EOF
 
-    # 5. Start Service (Now Safe)
     systemctl daemon-reload
     systemctl enable sshbot
     systemctl start sshbot
-    echo -e "${GREEN}✅ BOT V60 INSTALLED & RUNNING!${NC}"; pause
+    echo -e "${GREEN}✅ BOT V61 UPDATED!${NC}"; pause
 }
 
 # --- MAIN LOOP ---
 while true; do
     clear
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${WHITE}                  SSH MANAGER            ${NC}"
+    echo -e "${WHITE}      SSH MANAGER V61 (UI UPGRADE)💎      ${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e " ${GREEN}[01]${NC} ADD USER"
     echo -e " ${GREEN}[02]${NC} RENEW USER"
