@@ -344,7 +344,7 @@ def txt(update: Update, context: CallbackContext):
         
         elif act == 'a2':
             context.user_data.update({'np': msg})
-            kb = [[InlineKeyboardButton("✅ YES", callback_data='exp_yes'), InlineKeyboardButton("♾️ NO (UNLIMITED)", callback_data='exp_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]]
+            kb = [[InlineKeyboardButton("🟢 YES", callback_data='exp_yes'), InlineKeyboardButton("🔴 NO", callback_data='exp_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]]
             update.message.reply_text("📅 *SET EXPIRY DATE?*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
         
         elif act == 'a_date':
