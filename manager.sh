@@ -1,20 +1,40 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V63 (FINAL SYSTEM FIX) 🔧
-#  - FIXED: PIP INSTALL ERROR ON DEBIAN 12+ ✅
-#  - FIXED: SERVICE STARTUP ISSUE ✅
-#  - UI: EXACT DESIGN FROM YOUR SCREENSHOTS ✅
+#  SSH MANAGER V65 (UNIVERSAL OS EDITION) 🌍
+#  - SUPPORTS: Ubuntu, Debian, CentOS, Alma, Rocky 🖥️
+#  - ENGINE: AUTO-DETECT PACKAGE MANAGER (APT/YUM/DNF) ⚙️
+#  - PYTHON: SMART PIP INSTALLER (AUTO-FIX PEP668) 🐍
+#  - UI: SAME PERFECT DESIGN & COPYABLE BOXES ✅
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-# --- 1. DETECT OS ---
-if [[ -f /etc/debian_version ]]; then
-    OS="debian"; SSH_SERVICE="ssh"
-elif [[ -f /etc/redhat-release ]]; then
-    OS="centos"; SSH_SERVICE="sshd"
+# --- 1. SMART OS DETECTION ---
+if [ -f /etc/os-release ]; then
+    . /etc/os-release
+    OS=$ID
+    VERSION=$VERSION_ID
 else
-    OS="unknown"; SSH_SERVICE="sshd"
+    echo "❌ UNSUPPORTED OS"; exit 1
+fi
+
+# Detect Package Manager & Service Name
+if [[ "$OS" == "ubuntu" || "$OS" == "debian" || "$OS" == "kali" ]]; then
+    CMD="apt-get update -y && apt-get install -y"
+    SSH_SERVICE="ssh"
+    PKG_MGR="apt"
+elif [[ "$OS" == "centos" || "$OS" == "rhel" || "$OS" == "almalinux" || "$OS" == "rocky" ]]; then
+    CMD="yum install -y"
+    SSH_SERVICE="sshd"
+    PKG_MGR="yum"
+elif [[ "$OS" == "fedora" ]]; then
+    CMD="dnf install -y"
+    SSH_SERVICE="sshd"
+    PKG_MGR="dnf"
+else
+    echo "⚠️ UNKNOWN DISTRO. DEFAULTING TO APT."
+    CMD="apt-get install -y"
+    SSH_SERVICE="sshd"
 fi
 
 # --- CONFIG ---
@@ -35,7 +55,7 @@ mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  🚫 CLEANUP (Essential for Fix)
+#  🚫 CLEANUP
 # ==================================================
 pkill -f ssh_bot.py
 systemctl stop sshbot >/dev/null 2>&1
@@ -49,16 +69,19 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 
 check_status_cli() {
     local u=$1
+    # Universal check for both SSH and Dropbear
     if ps -ef | grep "sshd: $u" | grep -v grep | grep -qE "@| "; then echo -e "🟢"
     elif pgrep -u "$u" dropbear >/dev/null; then echo -e "🟢"
-    elif passwd -S "$u" | grep -q " L "; then echo -e "⛔"
+    elif passwd -S "$u" 2>/dev/null | grep -q " L "; then echo -e "⛔"
     else echo -e "🔴"
     fi
 }
 
 fun_create() {
-    clear; echo -e "${BLUE}=== ADD USER ===${NC}"
-    read -p " 👤 ENTER USERNAME : " u
+    clear; echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}               ADD NEW USER               ${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    read -p " 👤 USERNAME : " u
     if [[ ! "$u" =~ ^[a-zA-Z0-9]+$ ]]; then echo -e "${RED}❌ INVALID CHARS!${NC}"; pause; return; fi
     if id "$u" &>/dev/null; then echo -e "${RED}❌ EXISTS!${NC}"; pause; return; fi
     read -p " 🔑 PASSWORD : " p
@@ -69,7 +92,7 @@ fun_create() {
     else d="NEVER"; t="00:00"; fi
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V63" >> "$USER_DB"
+    echo "$u|$d|$t|V65" >> "$USER_DB"
     clear; echo -e "${GREEN}✅ CREATED${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " User : $u"
@@ -81,9 +104,11 @@ fun_create() {
 }
 
 fun_list() {
-    clear; echo -e "${BLUE}=== USER LIST ===${NC}"
+    clear; echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+    echo -e "${YELLOW}              USER LIST                   ${NC}"
+    echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     printf "${PURPLE}%-15s | %-12s | %-5s${NC}\n" "USER" "DATE" "ST"
-    echo "----------------------------------------"
+    echo "------------------------------------------"
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
         st=$(check_status_cli "$u"); printf "%-15s | %-12s | %b\n" "$u" "$d" "$st"
@@ -92,7 +117,8 @@ fun_list() {
 
 fun_settings() {
     clear; echo -e "${BLUE}=== SETTINGS ===${NC}"
-    echo " [1] INSTALL / UPDATE BOT (FIX ERRORS)"
+    echo -e " detected os: ${GREEN}$OS $VERSION${NC}"
+    echo " [1] INSTALL / UPDATE BOT"
     echo " [2] FIX TIMEZONE"
     echo " [0] BACK"
     read -p " OPTION: " s
@@ -104,28 +130,37 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V63 - CRITICAL FIX)
+#  🤖 BOT INSTALLER (UNIVERSAL)
 # ==================================================
 fun_install_bot() {
-    clear; echo -e "${YELLOW}INSTALLING BOT V63 (FIXING DEBIAN ERROR)...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT ON ($OS)...${NC}"
     
-    # 1. Config
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
 
-    # 2. Dependencies (THE FIX IS HERE)
-    echo ">> Installing Libraries..."
-    if [[ "$OS" == "debian" ]]; then apt-get update -y; apt-get install python3-pip -y; else yum install python3-pip -y; fi
+    # --- 1. UNIVERSAL DEPENDENCY INSTALLER ---
+    echo ">> Installing Python & Pip using $PKG_MGR..."
+    eval "$CMD python3 python3-pip" >/dev/null 2>&1
     
-    # --- FORCE INSTALL ON DEBIAN 12 ---
-    pip3 install python-telegram-bot==13.15 schedule --force-reinstall --break-system-packages >/dev/null 2>&1
+    # Also install sudo/wget if missing
+    if ! command -v sudo &> /dev/null; then eval "$CMD sudo"; fi
 
-    # 3. Create Service FIRST
-    echo ">> Creating Service..."
+    # --- 2. SMART PIP INSTALLER ---
+    echo ">> Installing Python Libraries..."
+    # Try installing normally first
+    if pip3 install python-telegram-bot==13.15 schedule >/dev/null 2>&1; then
+        echo -e "${GREEN}✔ Pip installed normally.${NC}"
+    else
+        echo -e "${YELLOW}⚠ Triggering PEP668 Fix...${NC}"
+        # If failed, force break system packages (For Debian 12/Ubuntu 23+)
+        pip3 install python-telegram-bot==13.15 schedule --break-system-packages --force-reinstall >/dev/null 2>&1
+    fi
+
+    # 3. Create Service
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
-Description=SSH Bot V63
+Description=SSH Bot V65
 After=network.target
 [Service]
 ExecStart=/usr/bin/python3 /root/ssh_bot.py
@@ -136,7 +171,6 @@ WantedBy=multi-user.target
 EOF
 
     # 4. Bot Code
-    echo ">> Writing Bot Logic..."
     cat > /root/ssh_bot.py << 'EOF'
 import logging, os, subprocess, re
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
@@ -179,7 +213,7 @@ def get_main_menu():
 
 def start(update: Update, context: CallbackContext):
     if update.effective_user.id != ADMIN_ID: return
-    update.message.reply_text("⚡ *SSH MANAGER V63*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+    update.message.reply_text("⚡ *SSH MANAGER V65*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
 
 def btn(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -188,7 +222,7 @@ def btn(update: Update, context: CallbackContext):
     
     try:
         if data == 'back':
-            query.edit_message_text("⚡ *SSH MANAGER V63*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+            query.edit_message_text("⚡ *SSH MANAGER V65*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
             return
 
         if data == 'add':
@@ -220,7 +254,6 @@ def btn(update: Update, context: CallbackContext):
                         exp = "No Expiry" if d == "NEVER" else d
                         st = get_status(u)
                         body += f"{u:<10} | {st} | {exp}\n"
-            
             if not body: body = "No Users Found"
             msg = header + f"```\n{body}```" + "➖➖➖➖➖➖➖➖➖➖➖➖"
             query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
@@ -235,7 +268,6 @@ def btn(update: Update, context: CallbackContext):
                         if not u.strip(): continue
                         st = get_status(u)
                         body += f"{u:<10} :    {st}\n"
-            
             if not body: body = "No Users Found"
             msg = header + f"```\n{body}```" + "➖➖➖➖➖➖➖➖➖➖➖➖"
             query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
@@ -282,10 +314,8 @@ Pass: {p}
 📋 *CLICK TO COPY:*
 `{u}:{p}`"""
             
-            if update.callback_query:
-                update.callback_query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
-            else:
-                update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            if update.callback_query: update.callback_query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            else: update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         else:
             msg = "❌ USER ALREADY EXISTS"
             if update.callback_query: update.callback_query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
@@ -320,12 +350,22 @@ def txt(update: Update, context: CallbackContext):
         elif act == 'r1': context.user_data.update({'ru': msg, 'act': 'r2'}); update.message.reply_text("📅 *NEW DATE:*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         elif act == 'r2':
             u = context.user_data['ru']; d = msg; subprocess.run(f"usermod -U {u}", shell=True)
-            lines = [l for l in open(DB_FILE) if not l.startswith(f"{u}|")]; lines.append(f"{u}|{d}|23:59|Renew\n")
+            lines = []; 
+            if os.path.exists(DB_FILE):
+                with open(DB_FILE, 'r') as f:
+                    for line in f:
+                        if not line.startswith(f"{u}|"): lines.append(line)
+            lines.append(f"{u}|{d}|23:59|Renew\n")
             with open(DB_FILE, 'w') as f: f.writelines(lines)
             update.message.reply_text("✅ RENEWED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         elif act == 'd1':
             u=msg; subprocess.run(f"pkill -u {u}", shell=True); subprocess.run(f"userdel -f -r {u}", shell=True)
-            lines = [l for l in open(DB_FILE) if not l.startswith(f"{u}|")]; with open(DB_FILE, 'w') as f: f.writelines(lines)
+            lines = []; 
+            if os.path.exists(DB_FILE):
+                with open(DB_FILE, 'r') as f:
+                    for line in f:
+                        if not line.startswith(f"{u}|"): lines.append(line)
+            with open(DB_FILE, 'w') as f: f.writelines(lines)
             update.message.reply_text("🗑 DELETED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         elif act == 'l1':
             u=msg; subprocess.run(f"usermod -L {u}", shell=True); subprocess.run(f"pkill -KILL -u {u}", shell=True)
@@ -335,26 +375,26 @@ def txt(update: Update, context: CallbackContext):
 
 def main():
     up = Updater(TOKEN, use_context=True)
-    up.dispatcher.add_handler(CommandHandler("start", start))
-    up.dispatcher.add_handler(CallbackQueryHandler(btn))
-    up.dispatcher.add_handler(MessageHandler(Filters.text, txt))
+    dp = up.dispatcher
+    dp.add_handler(CommandHandler("start", start))
+    dp.add_handler(CallbackQueryHandler(btn))
+    dp.add_handler(MessageHandler(Filters.text, txt))
     up.start_polling(); up.idle()
 
 if __name__ == '__main__': main()
 EOF
 
-    # 5. Start Service (Correct Order)
     systemctl daemon-reload
     systemctl enable sshbot
     systemctl start sshbot
-    echo -e "${GREEN}✅ BOT V63 INSTALLED & STARTED!${NC}"; pause
+    echo -e "${GREEN}✅ BOT V65 INSTALLED & RUNNING!${NC}"; pause
 }
 
 # --- MAIN LOOP ---
 while true; do
     clear
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${WHITE}      SSH MANAGER V63 (FINAL)💎           ${NC}"
+    echo -e "${WHITE}      SSH MANAGER V65 (UNIVERSAL)💎       ${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e " ${GREEN}[01]${NC} ADD USER"
     echo -e " ${GREEN}[02]${NC} RENEW USER"
