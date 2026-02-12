@@ -1,14 +1,14 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V65 (UNIVERSAL & COPYABLE UI) 🌍
-#  - OS SUPPORT: Ubuntu, Debian, CentOS, Fedora, Rocky 🖥️
-#  - ENGINE: Auto-detects Package Manager (APT/YUM/DNF) ⚙️
-#  - UI: New "Account" Design with Copyable Text 📋
+#  SSH MANAGER V67 (INSTANT NOTIFIER) 🔔
+#  - NEW: REAL-TIME LOGIN ALERTS (WITHIN 1 SEC) 🚀
+#  - LOGIC: TAILS AUTH LOGS AUTOMATICALLY ⚙️
+#  - FIX: ALL PREVIOUS UI/LOCK BUGS SOLVED ✅
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-# --- 1. SMART OS DETECTION ---
+# --- 1. OS DETECTION ---
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS=$ID
@@ -16,18 +16,12 @@ else
     echo "❌ UNSUPPORTED OS"; exit 1
 fi
 
-# Detect Package Manager
-if [[ "$OS" == "ubuntu" || "$OS" == "debian" || "$OS" == "kali" || "$OS" == "linuxmint" ]]; then
+if [[ "$OS" == "ubuntu" || "$OS" == "debian" || "$OS" == "kali" ]]; then
     CMD="apt-get update -y && apt-get install -y"
-    PKG_MGR="apt"
-elif [[ "$OS" == "centos" || "$OS" == "rhel" || "$OS" == "almalinux" || "$OS" == "rocky" ]]; then
+elif [[ "$OS" == "centos" || "$OS" == "almalinux" || "$OS" == "rocky" ]]; then
     CMD="yum install -y"
-    PKG_MGR="yum"
-elif [[ "$OS" == "fedora" ]]; then
-    CMD="dnf install -y"
-    PKG_MGR="dnf"
 else
-    CMD="apt-get install -y" # Default fallback
+    CMD="apt-get install -y"
 fi
 
 # --- CONFIG ---
@@ -62,9 +56,8 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 
 check_status_cli() {
     local u=$1
-    if ps -ef | grep "sshd: $u" | grep -v grep | grep -qE "@| "; then echo -e "🟢"
-    elif pgrep -u "$u" dropbear >/dev/null; then echo -e "🟢"
-    elif passwd -S "$u" 2>/dev/null | grep -q " L "; then echo -e "⛔"
+    if passwd -S "$u" 2>/dev/null | grep -q " L "; then echo -e "⛔"
+    elif w -h | grep -q "^$u "; then echo -e "🟢"
     else echo -e "🔴"
     fi
 }
@@ -84,12 +77,13 @@ fun_create() {
     else d="NEVER"; t="00:00"; fi
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V65" >> "$USER_DB"
+    echo "$u|$d|$t|V67" >> "$USER_DB"
     clear; echo -e "${GREEN}✅ CREATED${NC}"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo " User : $u"
     echo " Pass : $p"
     echo " Date : $d"
+    echo " Time : $t"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
     echo "$u:$p"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"; pause
@@ -99,17 +93,16 @@ fun_list() {
     clear; echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e "${YELLOW}              USER LIST                   ${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    printf "${PURPLE}%-15s | %-12s | %-5s${NC}\n" "USER" "DATE" "ST"
+    printf "${PURPLE}%-12s | %-12s | %-5s${NC}\n" "USER" "DATE" "ST"
     echo "------------------------------------------"
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
-        st=$(check_status_cli "$u"); printf "%-15s | %-12s | %b\n" "$u" "$d" "$st"
+        st=$(check_status_cli "$u"); printf "%-12s | %-12s | %b\n" "$u" "$d" "$st"
     done < "$USER_DB"; pause
 }
 
 fun_settings() {
     clear; echo -e "${BLUE}=== SETTINGS ===${NC}"
-    echo -e " SYSTEM: ${GREEN}$OS${NC} | MANAGER: ${GREEN}$PKG_MGR${NC}"
     echo " [1] INSTALL / UPDATE BOT"
     echo " [2] FIX TIMEZONE"
     echo " [0] BACK"
@@ -122,33 +115,28 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (UNIVERSAL)
+#  🤖 BOT INSTALLER (V67 - NOTIFIER ADDED)
 # ==================================================
 fun_install_bot() {
-    clear; echo -e "${YELLOW}INSTALLING BOT ON $OS...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT V67 (WITH NOTIFICATIONS)...${NC}"
     
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
 
-    # 1. Install System Dependencies
-    echo ">> Installing Python & Tools..."
+    # Install Libs
     eval "$CMD python3 python3-pip" >/dev/null 2>&1
-    if ! command -v sudo &> /dev/null; then eval "$CMD sudo"; fi
-
-    # 2. Install Python Libs (Smart Mode)
-    echo ">> Installing Bot Libraries..."
     if pip3 install python-telegram-bot==13.15 schedule >/dev/null 2>&1; then
-        echo -e "${GREEN}✔ Installed successfully.${NC}"
+        echo -e "${GREEN}✔ Libs Installed.${NC}"
     else
-        echo -e "${YELLOW}⚠ Using system-break method (Debian 12/Ubuntu 24)...${NC}"
+        echo -e "${YELLOW}⚠ Using Force Install...${NC}"
         pip3 install python-telegram-bot==13.15 schedule --break-system-packages --force-reinstall >/dev/null 2>&1
     fi
 
-    # 3. Create Service
+    # Create Service
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
-Description=SSH Bot V65
+Description=SSH Bot V67
 After=network.target
 [Service]
 ExecStart=/usr/bin/python3 /root/ssh_bot.py
@@ -158,9 +146,9 @@ RestartSec=3
 WantedBy=multi-user.target
 EOF
 
-    # 4. Bot Code (Updated UI)
+    # Bot Code (Includes Login Monitor Thread)
     cat > /root/ssh_bot.py << 'EOF'
-import logging, os, subprocess, re
+import logging, os, subprocess, re, threading, time
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 
@@ -179,13 +167,51 @@ try: ADMIN_ID = int(config.get("ADMIN_ID"))
 except: ADMIN_ID = 0
 DB_FILE = "/etc/xpanel/users_db.txt"
 
+# --- REAL-TIME LOGIN MONITOR ---
+def watch_logs(updater):
+    # Detect log file
+    log_files = ["/var/log/auth.log", "/var/log/secure"]
+    target_log = ""
+    for l in log_files:
+        if os.path.exists(l):
+            target_log = l
+            break
+    
+    if not target_log: return
+
+    # Tail the log file (follow new lines only)
+    proc = subprocess.Popen(['tail', '-F', '-n', '0', target_log], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    
+    while True:
+        line = proc.stdout.readline().decode('utf-8', errors='replace')
+        if not line: continue
+        
+        # Check for Accepted password/publickey
+        if "Accepted" in line and "ssh" in line.lower():
+            try:
+                parts = line.split()
+                if "for" in parts:
+                    idx = parts.index("for") + 1
+                    user = parts[idx]
+                    
+                    # Verify user exists in our DB (to avoid system alerts)
+                    is_our_user = False
+                    if os.path.exists(DB_FILE):
+                        with open(DB_FILE) as f:
+                            if any(l.startswith(f"{user}|") for l in f):
+                                is_our_user = True
+                    
+                    if is_our_user:
+                        msg = f"🔔 *LOGIN DETECTED!*\n━━━━━━━━━━━━━━━━\n👤 User: `{user}`\n🟢 Status: Connected\n━━━━━━━━━━━━━━━━"
+                        updater.bot.send_message(chat_id=ADMIN_ID, text=msg, parse_mode=ParseMode.MARKDOWN)
+            except: pass
+
 def get_status(u):
     try:
-        cmd = f"ps -ef | grep 'sshd: {u}' | grep -v grep"
-        out = subprocess.getoutput(cmd)
-        if out and "sshd:" in out: return "🟢"
-        if subprocess.getoutput(f"pgrep -u {u} dropbear"): return "🟢"
-        if " L " in subprocess.getoutput(f"passwd -S {u}"): return "⛔"
+        lock_check = subprocess.getoutput(f"passwd -S {u}")
+        if " L " in lock_check: return "⛔"
+        online_users = subprocess.getoutput("who | awk '{print $1}'")
+        if u in online_users.split(): return "🟢"
     except: pass
     return "🔴"
 
@@ -201,7 +227,7 @@ def get_main_menu():
 
 def start(update: Update, context: CallbackContext):
     if update.effective_user.id != ADMIN_ID: return
-    update.message.reply_text("⚡ *SSH MANAGER V65*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+    update.message.reply_text("⚡ *SSH MANAGER V67*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
 
 def btn(update: Update, context: CallbackContext):
     query = update.callback_query
@@ -210,7 +236,7 @@ def btn(update: Update, context: CallbackContext):
     
     try:
         if data == 'back':
-            query.edit_message_text("⚡ *SSH MANAGER V65*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+            query.edit_message_text("⚡ *SSH MANAGER V67*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
             return
 
         if data == 'add':
@@ -237,11 +263,10 @@ def btn(update: Update, context: CallbackContext):
                     for l in f:
                         parts = l.split('|')
                         if len(parts) < 2: continue
-                        u = parts[0][:10]; d = parts[1]
-                        if not u.strip(): continue
-                        exp = "No Expiry" if d == "NEVER" else d
-                        st = get_status(u)
-                        body += f"{u:<10} | {st} | {exp}\n"
+                        u = parts[0][:12]; d = parts[1]
+                        t = parts[2].strip() if len(parts) > 2 else "00:00"
+                        if d == "NEVER": body += f"{u:<12} | No Expiry\n"
+                        else: body += f"{u:<12} | {d} | {t}\n"
             if not body: body = "No Users Found"
             msg = header + f"```\n{body}```" + "➖➖➖➖➖➖➖➖➖➖➖➖"
             query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
@@ -255,7 +280,7 @@ def btn(update: Update, context: CallbackContext):
                         u = l.split('|')[0]
                         if not u.strip(): continue
                         st = get_status(u)
-                        body += f"{u:<10} :    {st}\n"
+                        body += f"{u:<12} :    {st}\n"
             if not body: body = "No Users Found"
             msg = header + f"```\n{body}```" + "➖➖➖➖➖➖➖➖➖➖➖➖"
             query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
@@ -274,7 +299,7 @@ def btn(update: Update, context: CallbackContext):
         
         elif data == 'tz':
             subprocess.run("timedatectl set-timezone Africa/Tunis", shell=True)
-            query.edit_message_text("🌍 TIMEZONE FIXED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            query.edit_message_text("🌍 DONE", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         
         elif data == 'exp_yes':
             context.user_data['act'] = 'a_date'
@@ -293,8 +318,6 @@ def create_user_final(update, context, d, t):
             with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{t}|Bot\n")
             
             exp_txt = "No date or time" if d == "NEVER" else f"Expiry: {d}\nTime: {t}"
-            
-            # --- NEW DESIGN AS REQUESTED ---
             msg = f"""Account 
 ━━━━━━━━━━━━━━━━━━━━
 User: `{u}`
@@ -303,11 +326,10 @@ Pass: `{p}`
 ━━━━━━━━━━━━━━━━━━━━
 `{u}:{p}`
 ━━━━━━━━━━━━━━━━━━━━"""
-            
             if update.callback_query: update.callback_query.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             else: update.message.reply_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
         else:
-            msg = "❌ USER ALREADY EXISTS"
+            msg = "❌ EXISTS"
             if update.callback_query: update.callback_query.edit_message_text(msg, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
             else: update.message.reply_text(msg, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
     except: pass
@@ -357,9 +379,18 @@ def txt(update: Update, context: CallbackContext):
                         if not line.startswith(f"{u}|"): lines.append(line)
             with open(DB_FILE, 'w') as f: f.writelines(lines)
             update.message.reply_text("🗑 DELETED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+        
+        # --- FIXED LOCK LOGIC ---
         elif act == 'l1':
-            u=msg; subprocess.run(f"usermod -L {u}", shell=True); subprocess.run(f"pkill -KILL -u {u}", shell=True)
-            update.message.reply_text("⛔ LOCKED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            u=msg
+            st = subprocess.getoutput(f"passwd -S {u}")
+            if " L " in st:
+                subprocess.run(f"usermod -U {u}", shell=True)
+                update.message.reply_text("🟢 UNLOCKED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
+            else:
+                subprocess.run(f"usermod -L {u}", shell=True)
+                subprocess.run(f"pkill -KILL -u {u}", shell=True)
+                update.message.reply_text("⛔ LOCKED", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("BACK", callback_data='back')]]))
 
     except: pass
 
@@ -369,22 +400,26 @@ def main():
     dp.add_handler(CommandHandler("start", start))
     dp.add_handler(CallbackQueryHandler(btn))
     dp.add_handler(MessageHandler(Filters.text, txt))
+    
+    # Start Log Monitor in Background
+    t = threading.Thread(target=watch_logs, args=(up,))
+    t.daemon = True
+    t.start()
+    
     up.start_polling(); up.idle()
 
 if __name__ == '__main__': main()
 EOF
 
-    systemctl daemon-reload
-    systemctl enable sshbot
-    systemctl start sshbot
-    echo -e "${GREEN}✅ BOT V65 INSTALLED & RUNNING!${NC}"; pause
+    systemctl daemon-reload; systemctl enable sshbot; systemctl start sshbot
+    echo -e "${GREEN}✅ BOT V67 UPDATED!${NC}"; pause
 }
 
 # --- MAIN LOOP ---
 while true; do
     clear
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
-    echo -e "${WHITE}      SSH MANAGER V65 (UNIVERSAL)💎       ${NC}"
+    echo -e "${WHITE}              SSH MANAGER V67 🔔        ${NC}"
     echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
     echo -e " ${GREEN}[01]${NC} ADD USER"
     echo -e " ${GREEN}[02]${NC} RENEW USER"
