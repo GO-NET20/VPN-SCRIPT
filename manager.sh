@@ -1,8 +1,8 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V81 (ACCURATE MONITOR) 💎
-#  - FIX: Fixed Status Icons (🟢/🔴) in Bot
-#  - LOGIC: Dual check method (Process name + User PID)
+#  SSH MANAGER V84 (NO HEADERS) 💎
+#  - UPDATE: Removed "ONLINE MONITOR" & "ALL USERS LIST" titles
+#  - DESIGN: Clean list view only
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -50,15 +50,11 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 # --- CLI STATUS CHECKER ---
 check_status_cli() {
     local u=$1
-    # Check if locked
     if grep -q "^$u:!:" /etc/shadow || grep -q "^$u:*:" /etc/shadow; then
         echo -e "${RED}LOCKED${NC}"
         return
     fi
-    # Check SSH (Greps for 'sshd: user' with word boundary or space to avoid partial match)
-    if ps -ef | grep "sshd: $u" | grep -v grep > /dev/null 2>&1; then
-        echo -e "${GREEN}ONLINE${NC}"
-    elif pgrep -u "$u" > /dev/null 2>&1; then
+    if ps -ef | grep "sshd: $u" | grep -v grep > /dev/null 2>&1 || pgrep -u "$u" > /dev/null 2>&1; then
         echo -e "${GREEN}ONLINE${NC}"
     else
         echo -e "${WHITE}OFFLINE${NC}"
@@ -68,7 +64,7 @@ check_status_cli() {
 draw_header() {
     clear
     echo -e "${CYAN}==================================================${NC}"
-    echo -e "                ${BOLD}${WHITE}SSH MANAGER (V81)${NC}"
+    echo -e "                ${BOLD}${WHITE}SSH MANAGER (V84)${NC}"
     echo -e "${CYAN}==================================================${NC}"
 }
 
@@ -87,7 +83,7 @@ fun_create() {
     else d="NEVER"; t="00:00"; fi
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V81" >> "$USER_DB"
+    echo "$u|$d|$t|V84" >> "$USER_DB"
     echo -e "${GREEN}✅ SUCCESS${NC}"; pause
 }
 
@@ -113,7 +109,6 @@ fun_online() {
     count=0
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
-        # CLI Monitor Logic
         if ps -ef | grep "sshd: $u" | grep -v grep > /dev/null 2>&1 || pgrep -u "$u" >/dev/null 2>&1; then
             echo -e " 👤 $u : ${GREEN}ONLINE${NC}"
             ((count++))
@@ -128,7 +123,7 @@ fun_settings() {
     draw_header
     echo -e "                ${WHITE}SETTINGS${NC}"
     echo -e "${CYAN}==================================================${NC}"
-    echo -e " ${GREEN}[01]${NC} UPDATE BOT (V81)"
+    echo -e " ${GREEN}[01]${NC} UPDATE BOT (V84)"
     echo -e " ${GREEN}[02]${NC} FIX TIMEZONE"
     echo -e " ${GREEN}[00]${NC} BACK"
     echo -e "${CYAN}==================================================${NC}"
@@ -140,13 +135,13 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V81 - ACCURATE ICONS)
+#  🤖 BOT INSTALLER (V84 - NO HEADERS)
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
 
-    clear; echo -e "${YELLOW}INSTALLING BOT V81 (ACCURATE MODE)...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT V84 (NO HEADERS)...${NC}"
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
@@ -158,7 +153,7 @@ fun_install_bot() {
     # Systemd Service
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
-Description=SSH Bot V81
+Description=SSH Bot V84
 After=network.target network-online.target
 Wants=network-online.target
 
@@ -199,28 +194,16 @@ DB_FILE = "/etc/xpanel/users_db.txt"
 
 def get_status(u):
     try:
-        # 1. Check Locked (Shadow File)
-        shadow_cmd = f"grep '^{u}:' /etc/shadow"
-        shadow = subprocess.getoutput(shadow_cmd)
-        if "!" in shadow.split(":")[1] or "*" in shadow.split(":")[1]:
-            return "⛔" # Locked
+        # Check Locked
+        shadow = subprocess.getoutput(f"grep '^{u}:' /etc/shadow")
+        if "!" in shadow.split(":")[1] or "*" in shadow.split(":")[1]: return "⛔"
 
-        # 2. Check Connection (Dual Method)
-        # Method A: Check for sshd process with username
-        cmd_ps = f"ps -ef | grep 'sshd: {u}' | grep -v grep"
-        out_ps = subprocess.getoutput(cmd_ps)
-        
-        # Method B: Check for any process owned by user (fallback)
-        cmd_pgrep = f"pgrep -u {u}"
-        out_pgrep = subprocess.getoutput(cmd_pgrep)
-
-        if out_ps or out_pgrep:
-            return "🟢" # Connected
-            
-    except Exception as e:
-        logging.error(f"Status Check Error: {e}")
-        
-    return "🔴" # Disconnected
+        # Check Connection (Green/Red)
+        cmd = f"ps -ef | grep 'sshd: {u}' | grep -v grep"
+        if subprocess.getoutput(cmd) or subprocess.getoutput(f"pgrep -u {u}"):
+            return "🟢" # Online
+    except: pass
+    return "🔴" # Offline
 
 def get_back_btn():
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
@@ -237,7 +220,7 @@ def get_main_menu():
 
 def start(update: Update, context: CallbackContext):
     if update.effective_user.id != ADMIN_ID: return
-    try: update.message.reply_text("⚡ *SSH MANAGER V81*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+    try: update.message.reply_text("⚡ *SSH MANAGER V84*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
     except: pass
 
 def btn(update: Update, context: CallbackContext):
@@ -248,7 +231,7 @@ def btn(update: Update, context: CallbackContext):
     
     if data == 'back': 
         context.user_data.clear()
-        q.edit_message_text("⚡ *SSH MANAGER V81*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+        q.edit_message_text("⚡ *SSH MANAGER V84*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
         return
 
     try:
@@ -276,28 +259,37 @@ def btn(update: Update, context: CallbackContext):
         elif data == 'do_unlock':
             u = context.user_data.get('lock_u'); subprocess.run(f"usermod -U {u}", shell=True)
             q.edit_message_text(f"🟢 *USER {u} UNLOCKED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+        
         elif data == 'list':
-            header = "➖➖➖➖➖➖➖➖➖➖➖➖\n       ALL USERS LIST\n➖➖➖➖➖➖➖➖➖➖➖➖\n"; body = ""
+            # LIST: No Header, Just Data
+            body = ""
             if os.path.exists(DB_FILE):
                 with open(DB_FILE) as f:
                     for l in f:
                         p = l.split('|')
                         if len(p)<2: continue
-                        u=p[0][:10]; d=p[1]; st=get_status(p[0]); exp="No Expiry" if d=="NEVER" else d
-                        body += f"{u:<10} | {st} | {exp}\n"
-            msg = header + f"```\n{body}```" + "➖➖➖➖➖➖➖➖➖➖➖➖"
+                        u=p[0][:12] # Limit length
+                        st=get_status(p[0])
+                        body += f"{u:<12} |   {st}\n"
+            msg = f"```\n{body}```"
             q.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+
         elif data == 'onl':
-            header = "➖➖➖➖➖➖➖➖➖➖➖➖\n       ONLINE MONITOR\n➖➖➖➖➖➖➖➖➖➖➖➖\n"; body = ""
+            # MONITOR: No Header, Just Data
+            body = ""
+            count=0
             if os.path.exists(DB_FILE):
                 with open(DB_FILE) as f:
                     for l in f:
-                        u=l.split('|')[0]; st=get_status(u)
+                        u=l.split('|')[0][:12]
+                        st=get_status(l.split('|')[0])
                         if st == "🟢":
-                            body += f"{u:<10} :    {st}\n"
-            if body == "": body = "🔴 NO USERS ONLINE"
-            msg = header + f"```\n{body}```" + "➖➖➖➖➖➖➖➖➖➖➖➖"
+                            body += f"{u:<12} |   {st}\n"
+                            count+=1
+            if count == 0: body = "🔴 NO USERS ONLINE"
+            msg = f"```\n{body}```"
             q.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+
         elif data == 'bak':
             if os.path.exists(DB_FILE): context.bot.send_document(chat_id=ADMIN_ID, document=open(DB_FILE, 'rb'))
             q.edit_message_text("✅ *SAVED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
@@ -384,7 +376,7 @@ def main():
 if __name__ == '__main__': main()
 EOF
     systemctl daemon-reload; systemctl enable sshbot; systemctl start sshbot
-    echo -e "${GREEN}✅ BOT V81 INSTALLED!${NC}"; pause
+    echo -e "${GREEN}✅ BOT V84 INSTALLED!${NC}"; pause
 }
 
 # --- MAIN LOOP ---
