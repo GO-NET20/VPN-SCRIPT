@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V86 (CUSTOM DESIGN) 💎
-#  - MONITOR: Clean text only (No Icon)
-#  - ALL USERS: With User Icon (👤)
-#  - HEADERS: Removed completely
+#  SSH MANAGER V90 (FULL MONITOR) 💎
+#  - MONITOR: Shows ALL users with status (⬜ User ➜ 🟢/🔴)
+#  - ALL USERS: Shows Name Only (👤 User)
+#  - DESIGN: Clean, No headers
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -65,7 +65,7 @@ check_status_cli() {
 draw_header() {
     clear
     echo -e "${CYAN}==================================================${NC}"
-    echo -e "                ${BOLD}${WHITE}SSH MANAGER (V86)${NC}"
+    echo -e "                ${BOLD}${WHITE}SSH MANAGER (V90)${NC}"
     echo -e "${CYAN}==================================================${NC}"
 }
 
@@ -84,7 +84,7 @@ fun_create() {
     else d="NEVER"; t="00:00"; fi
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V86" >> "$USER_DB"
+    echo "$u|$d|$t|V90" >> "$USER_DB"
     echo -e "${GREEN}✅ SUCCESS${NC}"; pause
 }
 
@@ -124,7 +124,7 @@ fun_settings() {
     draw_header
     echo -e "                ${WHITE}SETTINGS${NC}"
     echo -e "${CYAN}==================================================${NC}"
-    echo -e " ${GREEN}[01]${NC} UPDATE BOT (V86)"
+    echo -e " ${GREEN}[01]${NC} UPDATE BOT (V90)"
     echo -e " ${GREEN}[02]${NC} FIX TIMEZONE"
     echo -e " ${GREEN}[00]${NC} BACK"
     echo -e "${CYAN}==================================================${NC}"
@@ -136,13 +136,13 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V86 - CUSTOM DESIGN)
+#  🤖 BOT INSTALLER (V90 - FULL MONITOR)
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
 
-    clear; echo -e "${YELLOW}INSTALLING BOT V86 (CUSTOM DESIGN)...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT V90 (FULL MONITOR)...${NC}"
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
@@ -154,7 +154,7 @@ fun_install_bot() {
     # Systemd Service
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
-Description=SSH Bot V86
+Description=SSH Bot V90
 After=network.target network-online.target
 Wants=network-online.target
 
@@ -195,11 +195,8 @@ DB_FILE = "/etc/xpanel/users_db.txt"
 
 def get_status(u):
     try:
-        # Check Locked
         shadow = subprocess.getoutput(f"grep '^{u}:' /etc/shadow")
         if "!" in shadow.split(":")[1] or "*" in shadow.split(":")[1]: return "⛔"
-
-        # Check Connection (Green/Red)
         cmd = f"ps -ef | grep 'sshd: {u}' | grep -v grep"
         if subprocess.getoutput(cmd) or subprocess.getoutput(f"pgrep -u {u}"):
             return "🟢" # Online
@@ -221,7 +218,7 @@ def get_main_menu():
 
 def start(update: Update, context: CallbackContext):
     if update.effective_user.id != ADMIN_ID: return
-    try: update.message.reply_text("⚡ *SSH MANAGER V86*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+    try: update.message.reply_text("⚡ *SSH MANAGER V90*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
     except: pass
 
 def btn(update: Update, context: CallbackContext):
@@ -232,7 +229,7 @@ def btn(update: Update, context: CallbackContext):
     
     if data == 'back': 
         context.user_data.clear()
-        q.edit_message_text("⚡ *SSH MANAGER V86*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+        q.edit_message_text("⚡ *SSH MANAGER V90*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
         return
 
     try:
@@ -262,34 +259,31 @@ def btn(update: Update, context: CallbackContext):
             q.edit_message_text(f"🟢 *USER {u} UNLOCKED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
         
         elif data == 'list':
-            # LIST: With Icon (👤)
+            # LIST: Just User Icon and Name (NO STATUS)
             body = ""
             if os.path.exists(DB_FILE):
                 with open(DB_FILE) as f:
                     for l in f:
                         p = l.split('|')
                         if len(p)<2: continue
-                        u=p[0][:10]
-                        st=get_status(p[0])
-                        # Format: 👤 Name | Status
-                        body += f"👤 {u:<10} | {st}\n"
+                        u=p[0] 
+                        # Format: 👤 User
+                        body += f"👤 {u}\n"
             msg = f"```\n{body}```"
             q.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
 
         elif data == 'onl':
-            # MONITOR: No Icon (Clean)
+            # MONITOR: Show ALL users with Status
             body = ""
-            count=0
             if os.path.exists(DB_FILE):
                 with open(DB_FILE) as f:
                     for l in f:
                         u=l.split('|')[0][:12]
                         st=get_status(l.split('|')[0])
-                        if st == "🟢":
-                            # Format: Name | Status (No Icon)
-                            body += f"{u:<12} | {st}\n"
-                            count+=1
-            if count == 0: body = "🔴 NO USERS ONLINE"
+                        # Format: ⬜ User ➜ Status (🟢 or 🔴)
+                        body += f"⬜ {u:<12} ➜ {st}\n"
+            
+            if body == "": body = "🚫 NO USERS FOUND"
             msg = f"```\n{body}```"
             q.edit_message_text(msg, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
 
@@ -379,7 +373,7 @@ def main():
 if __name__ == '__main__': main()
 EOF
     systemctl daemon-reload; systemctl enable sshbot; systemctl start sshbot
-    echo -e "${GREEN}✅ BOT V86 INSTALLED!${NC}"; pause
+    echo -e "${GREEN}✅ BOT V90 INSTALLED!${NC}"; pause
 }
 
 # --- MAIN LOOP ---
