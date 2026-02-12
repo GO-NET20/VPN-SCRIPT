@@ -1,9 +1,8 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V78 (STABLE & ANTI-CRASH) 💎
-#  - FIX: Status Checker is now 100% accurate 🟢
-#  - BOT: Anti-Crash System (Auto Restart) 🛡️
-#  - UI: "BACK" buttons added to all steps 🔙
+#  SSH MANAGER V80 (STRICT MONITOR) 💎
+#  - FIX: Status is now STRICT (Checks for active sessions only)
+#  - LOGIC: Looks for '@pts' or '@notty' to ignore ghost processes
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -48,7 +47,8 @@ touch "$USER_DB" "$LOG_FILE"
 
 pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 
-# --- STRICT STATUS CHECKER (CLI - UPDATED) ---
+# --- STRICT STATUS CHECKER (CLI) ---
+# This is the corrected logic
 check_status_cli() {
     local u=$1
     
@@ -58,11 +58,12 @@ check_status_cli() {
         return
     fi
 
-    # 2. Check SSHD (Works for WS, HTTP Custom, Standard)
-    # pgrep -f checks the full command line for "sshd: username"
-    if pgrep -f "sshd: $u" > /dev/null 2>&1; then
+    # 2. Strict SSH Check
+    # We grep for "sshd: user" AND ensure it contains "@" (meaning @pts or @notty)
+    # This filters out "sshd: user [priv]" which causes the false positive.
+    if ps -ef | grep "sshd: $u" | grep -v grep | grep -q "@"; then
         echo -e "${GREEN}ONLINE${NC}"
-    # 3. Check Dropbear
+    # 3. Check Dropbear (User owned process)
     elif pgrep -u "$u" dropbear > /dev/null 2>&1; then
         echo -e "${GREEN}ONLINE${NC}"
     else
@@ -73,7 +74,7 @@ check_status_cli() {
 draw_header() {
     clear
     echo -e "${CYAN}==================================================${NC}"
-    echo -e "                ${BOLD}${WHITE}SSH MANAGER (V78)${NC}"
+    echo -e "                ${BOLD}${WHITE}SSH MANAGER (V80)${NC}"
     echo -e "${CYAN}==================================================${NC}"
 }
 
@@ -92,7 +93,7 @@ fun_create() {
     else d="NEVER"; t="00:00"; fi
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V78" >> "$USER_DB"
+    echo "$u|$d|$t|V80" >> "$USER_DB"
     echo -e "${GREEN}✅ SUCCESS${NC}"; pause
 }
 
@@ -118,8 +119,8 @@ fun_online() {
     count=0
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
-        # UPDATED CHECK LOGIC
-        if pgrep -f "sshd: $u" >/dev/null 2>&1 || pgrep -u "$u" dropbear >/dev/null 2>&1; then
+        # Strict Monitor Logic
+        if ps -ef | grep "sshd: $u" | grep -v grep | grep -q "@" || pgrep -u "$u" dropbear >/dev/null; then
             echo -e " 👤 $u : ${GREEN}ONLINE${NC}"
             ((count++))
         fi
@@ -133,7 +134,7 @@ fun_settings() {
     draw_header
     echo -e "                ${WHITE}SETTINGS${NC}"
     echo -e "${CYAN}==================================================${NC}"
-    echo -e " ${GREEN}[01]${NC} UPDATE BOT (V78 Stable)"
+    echo -e " ${GREEN}[01]${NC} UPDATE BOT (V80 Strict)"
     echo -e " ${GREEN}[02]${NC} FIX TIMEZONE"
     echo -e " ${GREEN}[00]${NC} BACK"
     echo -e "${CYAN}==================================================${NC}"
@@ -145,13 +146,13 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V78 ANTI-CRASH)
+#  🤖 BOT INSTALLER (V80 STRICT MODE)
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
 
-    clear; echo -e "${YELLOW}INSTALLING BOT V78 (ANTI-CRASH)...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT V80 (STRICT MODE)...${NC}"
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
@@ -160,10 +161,10 @@ fun_install_bot() {
     eval "$CMD python3 python3-pip" >/dev/null 2>&1
     pip3 install python-telegram-bot==13.7 schedule --break-system-packages --force-reinstall >/dev/null 2>&1
     
-    # Systemd Service with Auto-Restart
+    # Systemd Service
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
-Description=SSH Bot V78
+Description=SSH Bot V80
 After=network.target network-online.target
 Wants=network-online.target
 
@@ -204,18 +205,19 @@ DB_FILE = "/etc/xpanel/users_db.txt"
 
 def get_status(u):
     try:
-        # 1. Check Lock Status first
+        # 1. Check Locked
         shadow = subprocess.getoutput(f"grep '^{u}:' /etc/shadow")
         if "!" in shadow.split(":")[1] or "*" in shadow.split(":")[1]:
-            return "⛔" # Locked
+            return "⛔" 
 
-        # 2. Universal SSH Check (sshd: user)
-        # pgrep -f matches full command line (catches WS/HTTP Custom/Notty)
-        if subprocess.call(f"pgrep -f 'sshd: {u}'", shell=True, stdout=subprocess.DEVNULL) == 0:
+        # 2. Strict SSH Check (Must contain '@')
+        # This ignores 'sshd: user [priv]' and finds only 'sshd: user@pts/0' or 'sshd: user@notty'
+        cmd = f"ps -ef | grep 'sshd: {u}' | grep -v grep | grep '@'"
+        if subprocess.getoutput(cmd):
             return "🟢"
             
-        # 3. Check Dropbear
-        if subprocess.call(f"pgrep -u {u} dropbear", shell=True, stdout=subprocess.DEVNULL) == 0:
+        # 3. Dropbear Check
+        if subprocess.getoutput(f"pgrep -u {u} dropbear"): 
             return "🟢"
 
     except: pass
@@ -236,7 +238,7 @@ def get_main_menu():
 
 def start(update: Update, context: CallbackContext):
     if update.effective_user.id != ADMIN_ID: return
-    try: update.message.reply_text("⚡ *SSH MANAGER V78*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+    try: update.message.reply_text("⚡ *SSH MANAGER V80*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
     except: pass
 
 def btn(update: Update, context: CallbackContext):
@@ -247,7 +249,7 @@ def btn(update: Update, context: CallbackContext):
     
     if data == 'back': 
         context.user_data.clear()
-        q.edit_message_text("⚡ *SSH MANAGER V78*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+        q.edit_message_text("⚡ *SSH MANAGER V80*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
         return
 
     try:
@@ -385,7 +387,7 @@ def main():
 if __name__ == '__main__': main()
 EOF
     systemctl daemon-reload; systemctl enable sshbot; systemctl start sshbot
-    echo -e "${GREEN}✅ BOT V78 INSTALLED!${NC}"; pause
+    echo -e "${GREEN}✅ BOT V80 INSTALLED!${NC}"; pause
 }
 
 # --- MAIN LOOP ---
