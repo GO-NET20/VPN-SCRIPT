@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V90 (FULL MONITOR) 💎
+#  SSH MANAGER V90 (FULL MONITOR - NO TIMEZONE) 💎
 #  - MONITOR: Shows ALL users with status (⬜ User ➜ 🟢/🔴)
 #  - ALL USERS: Shows Name Only (👤 User)
-#  - DESIGN: Clean, No headers
+#  - REMOVED: Fix Timezone feature
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -125,24 +125,22 @@ fun_settings() {
     echo -e "                ${WHITE}SETTINGS${NC}"
     echo -e "${CYAN}==================================================${NC}"
     echo -e " ${GREEN}[01]${NC} UPDATE BOT (V90)"
-    echo -e " ${GREEN}[02]${NC} FIX TIMEZONE"
     echo -e " ${GREEN}[00]${NC} BACK"
     echo -e "${CYAN}==================================================${NC}"
     read -p " SELECT OPTION: " s
     case "$s" in
         1) fun_install_bot ;;
-        2) timedatectl set-timezone Africa/Tunis; echo -e "${GREEN}DONE${NC}"; pause ;;
     esac
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V90 - FULL MONITOR)
+#  🤖 BOT INSTALLER (V90 - FULL MONITOR - NO TZ)
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
 
-    clear; echo -e "${YELLOW}INSTALLING BOT V90 (FULL MONITOR)...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT V90 (NO TIMEZONE)...${NC}"
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
@@ -291,10 +289,8 @@ def btn(update: Update, context: CallbackContext):
             if os.path.exists(DB_FILE): context.bot.send_document(chat_id=ADMIN_ID, document=open(DB_FILE, 'rb'))
             q.edit_message_text("✅ *SAVED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
         elif data == 'set': 
-            q.edit_message_text("⚙️ *SETTINGS*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("UPDATE BOT", callback_data='ins'), InlineKeyboardButton("FIX TIMEZONE", callback_data='tz')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]]))
-        elif data == 'tz': 
-            subprocess.run("timedatectl set-timezone Africa/Tunis", shell=True)
-            q.edit_message_text("🌍 DONE", reply_markup=get_back_btn())
+            # REMOVED FIX TIMEZONE BUTTON
+            q.edit_message_text("⚙️ *SETTINGS*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("UPDATE BOT", callback_data='ins')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]]))
         elif data == 'exp_yes': 
             context.user_data['act']='a_date'
             q.edit_message_text("📅 *DATE (YYYY-MM-DD):*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
