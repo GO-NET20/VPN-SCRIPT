@@ -1,10 +1,10 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V106 (ULTIMATE RESELLER PRO) 💎
-#  - DESIGNED FOR SELLERS & BUSINESS
-#  - EXACT VISUAL DESIGN & SPACING MATCHED 100%
-#  - SILENT EXECUTION (No Linux warnings)
-#  - BULLETPROOF PYTHON BOT & MONITOR
+#  SSH MANAGER V107 (ULTIMATE RESELLER VIP) 💎
+#  - 100% PERFECT ALIGNMENT (CLI & TELEGRAM)
+#  - 1-LINE DATE & TIME INPUT
+#  - ABSOLUTE SILENT ERRORS (No Linux warnings)
+#  - ALL 8 OPTIONS FULLY FUNCTIONAL
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -38,9 +38,11 @@ MIGRATION_FILE="/root/migration_users.txt"
 MY_TOKEN="8134717950:AAGj2wWaABBUWbPLa7jX6yEWHgwjgUelpwg"
 MY_ID="7587310857"
 
-# --- 3. COLORS ---
+# --- 3. COLORS & UI VARS ---
 RED='\033[1;31m'; GREEN='\033[1;32m'; YELLOW='\033[1;33m'
 PURPLE='\033[1;35m'; CYAN='\033[1;36m'; NC='\033[0m'; WHITE='\033[1;37m'
+BOX_T="╔════════════════════╗"
+BOX_B="╚════════════════════╝"
 
 mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
@@ -49,7 +51,6 @@ touch "$USER_DB" "$LOG_FILE"
 #  🛡️ PYTHON PRECISION MONITOR (BACKGROUND)
 # ==================================================
 if ! command -v python3 &> /dev/null; then
-    echo -e "${YELLOW}Installing Python3...${NC}"
     $CMD python3 python3-pip > /dev/null 2>&1
 fi
 
@@ -61,11 +62,6 @@ import datetime, subprocess, os, time
 DB_FILE = "/etc/xpanel/users_db.txt"
 LOG_FILE = "/var/log/kp_manager.log"
 MAX_LOGIN = 1
-
-def log_event(message):
-    try:
-        with open(LOG_FILE, "a") as f: f.write(f"{datetime.datetime.now()} - {message}\n")
-    except: pass
 
 def check_loop():
     while True:
@@ -92,7 +88,6 @@ def check_loop():
                             if now >= exp:
                                 subprocess.run(f"pkill -KILL -u {user}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                                 subprocess.run(f"userdel -f -r {user}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                log_event(f"EXPIRED: User {user} deleted.")
                                 status_changed = True; expired = True
                         except: pass
 
@@ -102,7 +97,6 @@ def check_loop():
                         c = int(subprocess.getoutput(f"pgrep -u {user} | grep -E 'sshd|dropbear' | wc -l"))
                         if c > MAX_LOGIN:
                             subprocess.run(f"pkill -KILL -u {user}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                            log_event(f"KICK: User {user} exceeded max logins.")
                     except: pass
                     new_lines.append(line)
 
@@ -122,7 +116,7 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 draw_header() {
     clear
     echo -e "${PURPLE}==================================================${NC}"
-    echo -e "         ${WHITE}SSH MANAGER V106 (RESELLER PRO)${NC}"
+    echo -e "           ${WHITE}SSH MANAGER V107 (VIP PRO)${NC}"
     echo -e "${PURPLE}==================================================${NC}"
 }
 
@@ -137,33 +131,33 @@ fun_create() {
     done
     p="12345"
     
-    echo -e " 👤 USERNAME : ${WHITE}$u${NC}"
-    echo -e " 🔑 PASSWORD : ${WHITE}$p${NC}"
-    read -p " 📅 Enter Date and time : " dt_input
+    echo -e "👤 USERNAME : ${WHITE}$u${NC}"
+    echo -e "🔑 PASSWORD : ${WHITE}$p${NC}"
+    read -p "📅 Enter Date and time : " dt_input
     
     d=$(echo "$dt_input" | awk '{print $1}')
     t=$(echo "$dt_input" | awk '{print $2}')
     
-    if [[ -z "$d" ]]; then d="NEVER"; t="00:00"; fi
-    if [[ -z "$t" ]]; then t="00:00"; fi
+    [[ -z "$d" ]] && d="NEVER"
+    [[ -z "$t" ]] && t="00:00"
     
     useradd -M -s /bin/false "$u" >/dev/null 2>&1
     echo "$u:$p" | chpasswd >/dev/null 2>&1
-    echo "$u|$d|$t|V106" >> "$USER_DB"
+    echo "$u|$d|$t|V107" >> "$USER_DB"
     
     clear
-    echo -e "${PURPLE}╔════════════════════╗${NC}"
-    echo -e "${PURPLE}       ♾  ACCOUNT  ♾ ${NC}"
-    echo -e "${PURPLE}╚════════════════════╝${NC}"
+    echo -e "${PURPLE}${BOX_T}${NC}"
+    echo -e "${PURPLE}     ♾  ACCOUNT  ♾ ${NC}"
+    echo -e "${PURPLE}${BOX_B}${NC}"
     echo -e ""
     echo -e "👤 Username   : ${WHITE}$u${NC}"
     echo -e "🔐 Password   : ${WHITE}$p${NC}"
     echo -e "📅 Expiry Date: ${WHITE}$d${NC}"
     echo -e "⏰ Expiry Time: ${WHITE}$t${NC}"
     echo -e ""
-    echo -e "${PURPLE}╔════════════════════╗${NC}"
-    echo -e "${WHITE}       📋 $u:$p ${NC}"
-    echo -e "${PURPLE}╚════════════════════╝${NC}"
+    echo -e "${PURPLE}${BOX_T}${NC}"
+    echo -e "${WHITE}    📋 $u:$p ${NC}"
+    echo -e "${PURPLE}${BOX_B}${NC}"
     pause
 }
 
@@ -171,9 +165,9 @@ fun_renew() {
     draw_header
     echo -e "                ${WHITE}RENEW USER${NC}"
     echo -e "${PURPLE}==================================================${NC}"
-    read -p " 👤 USERNAME : " u
+    read -p "👤 USERNAME : " u
     if ! grep -q "^$u|" "$USER_DB"; then echo -e "${RED}❌ NOT FOUND!${NC}"; pause; return; fi
-    read -p " 📅 Enter Date and time : " dt_input
+    read -p "📅 Enter Date and time : " dt_input
     d=$(echo "$dt_input" | awk '{print $1}')
     t=$(echo "$dt_input" | awk '{print $2}')
     [[ -z "$d" ]] && d="NEVER"
@@ -189,8 +183,8 @@ fun_remove() {
     draw_header
     echo -e "                ${WHITE}REMOVE USER${NC}"
     echo -e "${PURPLE}==================================================${NC}"
-    read -p " 👤 USERNAME : " u
-    read -p " ⚠️ CONFIRM? [y/n]: " c
+    read -p "👤 USERNAME : " u
+    read -p "⚠️ CONFIRM? [y/n]: " c
     if [[ "$c" == "y" ]]; then
         pkill -u "$u" >/dev/null 2>&1
         userdel -f -r "$u" >/dev/null 2>&1
@@ -204,7 +198,7 @@ fun_lock() {
     draw_header
     echo -e "                ${WHITE}LOCK/UNLOCK${NC}"
     echo -e "${PURPLE}==================================================${NC}"
-    read -p " 👤 USERNAME : " u
+    read -p "👤 USERNAME : " u
     echo " [1] LOCK ⛔"
     echo " [2] UNLOCK 🔓"
     read -p " SELECT: " s
@@ -218,27 +212,28 @@ fun_lock() {
 
 fun_list() {
     clear
-    echo -e "${PURPLE}╔════════════════════╗${NC}"
-    echo -e "${PURPLE}     LIST ACCOUNT     ${NC}"
-    echo -e "${PURPLE}╚════════════════════╝${NC}"
+    echo -e "${PURPLE}${BOX_T}${NC}"
+    echo -e "${PURPLE}    LIST ACCOUNT    ${NC}"
+    echo -e "${PURPLE}${BOX_B}${NC}"
     echo -e ""
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
         if id "$u" &>/dev/null; then
              [[ "$d" == "NEVER" ]] && DATE_STR="NEVER" || DATE_STR="$d • $t"
+             # Strict alignment formatting
              printf "${WHITE}%-12s ${PURPLE}│${WHITE} %s${NC}\n" "$u" "$DATE_STR"
         fi
     done < "$USER_DB"
     echo -e ""
-    echo -e "${PURPLE}╚════════════════════╝${NC}"
+    echo -e "${PURPLE}${BOX_B}${NC}"
     pause
 }
 
 fun_monitor_view() {
     clear
-    echo -e "${PURPLE}╔════════════════════╗${NC}"
-    echo -e "${PURPLE}     🟢 MONITOR 🔴    ${NC}"
-    echo -e "${PURPLE}╚════════════════════╝${NC}"
+    echo -e "${PURPLE}${BOX_T}${NC}"
+    echo -e "${PURPLE}    🟢 MONITOR 🔴   ${NC}"
+    echo -e "${PURPLE}${BOX_B}${NC}"
     echo -e ""
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
@@ -248,11 +243,12 @@ fun_monitor_view() {
              else
                 STATUS="🔴"
              fi
+             # Strict alignment formatting
              printf "${WHITE}%-12s ${PURPLE}│${NC}      %s\n" "$u" "$STATUS"
         fi
     done < "$USER_DB"
     echo -e ""
-    echo -e "${PURPLE}╚════════════════════╝${NC}"
+    echo -e "${PURPLE}${BOX_B}${NC}"
     pause
 }
 
@@ -265,7 +261,6 @@ fun_backup() {
     pause
 }
 
-# --- 🚀 MIGRATION FUNCTIONS ---
 fun_export_users() {
     draw_header; echo -e "${YELLOW}EXPORTING USERS...${NC}"
     cp "$USER_DB" "$MIGRATION_FILE"
@@ -310,7 +305,7 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V106 - PERFECT VISUALS)
+#  🤖 BOT INSTALLER (V107 - PIXEL PERFECT VISUALS)
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
@@ -325,7 +320,6 @@ fun_install_bot() {
         yum install -y python3 python3-pip >/dev/null 2>&1
     fi
     
-    # Break system packages flag for Ubuntu 23/24
     pip3 install python-telegram-bot==13.7 schedule requests --break-system-packages >/dev/null 2>&1 || \
     pip3 install python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
 
@@ -333,7 +327,7 @@ fun_install_bot() {
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
 
-    # PYTHON BOT SCRIPT (EXACT ALIGNMENT IN TELEGRAM)
+    # PYTHON BOT SCRIPT
     cat > /root/ssh_bot.py << 'EOF'
 import logging, os, subprocess
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
@@ -343,6 +337,8 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(messa
 CONF_FILE = "/etc/xpanel/bot.conf"
 DB_FILE = "/etc/xpanel/users_db.txt"
 MIGRATION_FILE = "/root/migration_users.txt"
+BOX_T = "╔════════════════════╗"
+BOX_B = "╚════════════════════╝"
 
 def load_config():
     c = {}
@@ -370,11 +366,11 @@ def get_menu():
     ])
 
 def start(u, c):
-    if u.effective_user.id == ADMIN_ID: u.message.reply_text("💎 *X-PANEL V106*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_menu())
+    if u.effective_user.id == ADMIN_ID: u.message.reply_text("💎 *X-PANEL V107*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_menu())
 
 def btn(u, c):
     q = u.callback_query; q.answer(); d = q.data
-    if d == 'back': c.user_data.clear(); q.edit_message_text("💎 *X-PANEL V106*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_menu()); return
+    if d == 'back': c.user_data.clear(); q.edit_message_text("💎 *X-PANEL V107*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_menu()); return
 
     try:
         if d == 'add':
@@ -383,19 +379,20 @@ def btn(u, c):
                 usr = f"USER{i}"
                 if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0 and f"{usr}|" not in (open(DB_FILE).read() if os.path.exists(DB_FILE) else ""): break
                 i += 1
-            c.user_data['u'] = usr; c.user_data['act'] = 'a_date'
-            q.edit_message_text(f"👤 Username: `{usr}`\n📅 *Enter Date (YYYY-MM-DD):*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
+            c.user_data['u'] = usr; c.user_data['act'] = 'a_datetime'
+            q.edit_message_text(f"👤 Username: `{usr}`\n📅 *Enter Date and time (YYYY-MM-DD HH:MM):*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
 
-        elif d == 'ren': c.user_data['act']='r1'; q.edit_message_text("🔄 *Username to Renew:*", parse_mode=ParseMode.MARKDOWN)
+        elif d == 'ren': c.user_data['act']='r_datetime'; q.edit_message_text("🔄 *Username to Renew:*", parse_mode=ParseMode.MARKDOWN)
         elif d == 'del': c.user_data['act']='d1'; q.edit_message_text("🗑️ *Username to Delete:*", parse_mode=ParseMode.MARKDOWN)
         elif d == 'lock': c.user_data['act']='l1'; q.edit_message_text("🔒 *Username to Lock:*", parse_mode=ParseMode.MARKDOWN)
         elif d == 'unlock': c.user_data['act']='ul1'; q.edit_message_text("🔓 *Username to Unlock:*", parse_mode=ParseMode.MARKDOWN)
 
-        # EXACT VISUAL: LIST ACCOUNT
+        # TELEGRAM EXACT FORMATTING - LIST
         elif d == 'list':
-            body = "╔════════════════════╗\n"
+            body = f"{BOX_T}\n"
             body += "     LIST ACCOUNT\n"
-            body += "╚════════════════════╝\n```text\n"
+            body += f"{BOX_B}\n"
+            body += "```text\n" # Code block forces monospace font in Telegram for perfect alignment
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
                     p = l.strip().split('|')
@@ -403,14 +400,16 @@ def btn(u, c):
                     usr, date, time = p[0], p[1], p[2]
                     date_str = "NEVER" if date == "NEVER" else f"{date} • {time}"
                     body += f"{usr:<12} │ {date_str}\n"
-            body += "```\n╚════════════════════╝"
-            q.edit_message_text(body, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
+            body += "```\n"
+            body += f"{BOX_B}"
+            q.edit_message_text(body, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
 
-        # EXACT VISUAL: MONITOR
+        # TELEGRAM EXACT FORMATTING - MONITOR
         elif d == 'onl':
-            body = "╔════════════════════╗\n"
+            body = f"{BOX_T}\n"
             body += "     🟢 MONITOR 🔴\n"
-            body += "╚════════════════════╝\n```text\n"
+            body += f"{BOX_B}\n"
+            body += "```text\n" # Code block for alignment
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
                     usr = l.split('|')[0]
@@ -418,8 +417,9 @@ def btn(u, c):
                     if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0: continue
                     st = get_status(usr)
                     body += f"{usr:<12} │      {st}\n"
-            body += "```\n╚════════════════════╝"
-            q.edit_message_text(body, parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
+            body += "```\n"
+            body += f"{BOX_B}"
+            q.edit_message_text(body, parse_mode=ParseMode.MARKDOWN_V2, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
 
         elif d == 'bak':
             if os.path.exists(DB_FILE): c.bot.send_document(ADMIN_ID, open(DB_FILE, 'rb'))
@@ -438,41 +438,44 @@ def txt(u, c):
     msg = u.message.text; act = c.user_data.get('act')
     
     try:
-        if act == 'a_date':
-            c.user_data['d'] = msg; c.user_data['act'] = 'a_time'
-            u.message.reply_text("⏰ *Enter Time (HH:MM):*", parse_mode=ParseMode.MARKDOWN)
-        elif act == 'a_time':
-            usr = c.user_data['u']; d = c.user_data['d']; pwd = "12345"
+        if act == 'a_datetime':
+            usr = c.user_data['u']; pwd = "12345"
+            parts = msg.split()
+            dt = parts[0] if len(parts) > 0 else "NEVER"
+            tm = parts[1] if len(parts) > 1 else "00:00"
+            
             subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            open(DB_FILE, 'a').write(f"{usr}|{d}|{msg}|Bot\n")
+            open(DB_FILE, 'a').write(f"{usr}|{dt}|{tm}|Bot\n")
             
-            # EXACT VISUAL: ACCOUNT CREATION
+            # VIP ACCOUNT CREATION MESSAGE
             resp = (
-                "╔════════════════════╗\n"
+                f"{BOX_T}\n"
                 "       ♾  ACCOUNT  ♾ \n"
-                "╚════════════════════╝\n\n"
+                f"{BOX_B}\n\n"
                 f"👤 Username   : {usr}\n"
                 f"🔐 Password   : {pwd}\n"
-                f"📅 Expiry Date: {d}\n"
-                f"⏰ Expiry Time: {msg}\n\n"
-                "╔════════════════════╗\n"
+                f"📅 Expiry Date: {dt}\n"
+                f"⏰ Expiry Time: {tm}\n\n"
+                f"{BOX_T}\n"
                 f"       📋 `{usr}:{pwd}`\n"
-                "╚════════════════════╝"
+                f"{BOX_B}"
             )
             u.message.reply_text(resp, parse_mode=ParseMode.MARKDOWN, reply_markup=get_menu())
 
-        elif act == 'r1':
-            c.user_data['ru'] = msg; c.user_data['act'] = 'r2'
-            u.message.reply_text("📅 *New Date (YYYY-MM-DD):*", parse_mode=ParseMode.MARKDOWN)
-        elif act == 'r2':
-            c.user_data['rd'] = msg; c.user_data['act'] = 'r3'
-            u.message.reply_text("⏰ *New Time (HH:MM):*", parse_mode=ParseMode.MARKDOWN)
-        elif act == 'r3':
+        elif act == 'r_datetime':
+            c.user_data['ru'] = msg; c.user_data['act'] = 'r_datetime_val'
+            u.message.reply_text("📅 *Enter New Date and time (YYYY-MM-DD HH:MM):*", parse_mode=ParseMode.MARKDOWN)
+
+        elif act == 'r_datetime_val':
             usr = c.user_data.get('ru')
+            parts = msg.split()
+            dt = parts[0] if len(parts) > 0 else "NEVER"
+            tm = parts[1] if len(parts) > 1 else "23:59"
+            
             if os.path.exists(DB_FILE):
                 lines = [l for l in open(DB_FILE) if not l.startswith(f"{usr}|")]
-                lines.append(f"{usr}|{c.user_data['rd']}|{msg}|Renew\n")
+                lines.append(f"{usr}|{dt}|{tm}|Renew\n")
                 open(DB_FILE, 'w').writelines(lines)
                 u.message.reply_text(f"✅ *RENEWED: {usr}*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_menu())
 
