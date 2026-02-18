@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V93 (PREMIUM ENGLISH) 💎
+#  SSH MANAGER V94 (PRECISION EDITION) 💎
+#  - CORE: Python-Based Precision Monitor
 #  - FIXED: Syntax Errors & Missing Functions
 #  - LANG: 100% Professional English
-#  - MODE: Auto-Sequence Users
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -27,12 +27,12 @@ fi
 # --- CONFIG ---
 USER_DB="/etc/xpanel/users_db.txt"
 BOT_CONF="/etc/xpanel/bot.conf"
-MONITOR_SCRIPT="/usr/local/bin/kp_monitor.sh"
+MONITOR_SCRIPT="/usr/local/bin/kp_monitor.py"
 LOG_FILE="/var/log/kp_manager.log"
 BACKUP_DIR="/root/backups"
 
 # --- CREDENTIALS ---
-MY_TOKEN="8275679858:AAGCTP9tsJzCgzXXzgA9hJQ8ooqhlFY8BcA"
+MY_TOKEN="8275679858:AAFShhXoDbS2vOMdY4AK349_CBEPoY71q_k"
 MY_ID="7587310857"
 
 # --- COLORS ---
@@ -43,52 +43,120 @@ mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  🛡️ MONITOR ENGINE (WAR MODE)
+#  🛡️ PYTHON PRECISION MONITOR (V94)
 # ==================================================
-pkill -f kp_monitor.sh
+# Installs Python if missing
+if ! command -v python3 &> /dev/null; then
+    echo -e "${YELLOW}Installing Python3 for Precision Monitor...${NC}"
+    $CMD python3 > /dev/null 2>&1
+fi
+
+pkill -f kp_monitor.py
 cat > "$MONITOR_SCRIPT" << 'EOF'
-#!/bin/bash
-DB="/etc/xpanel/users_db.txt"
-LOG="/var/log/kp_manager.log"
-MAX_LOGIN=1
+#!/usr/bin/env python3
+import datetime
+import subprocess
+import os
+import time
 
-while true; do
-    sleep 3
-    if [[ -f "$DB" ]]; then
-        NOW=$(date +%s)
-        while IFS='|' read -r user date time note; do
-            [[ -z "$user" || -z "$date" ]] && continue
-            
-            # Skip invalid lines or headers
-            if [[ "$user" == *"V93"* || "$user" == "Turbo" ]]; then continue; fi
+DB_FILE = "/etc/xpanel/users_db.txt"
+LOG_FILE = "/var/log/kp_manager.log"
+MAX_LOGIN = 1
 
-            # 1. Expiry Check
-            if [[ "$date" != "NEVER" ]]; then
-                [[ -z "$time" ]] && time="23:59"
-                EXP_TS=$(date -d "$date $time" +%s 2>/dev/null)
-                if [[ -n "$EXP_TS" && "$NOW" -ge "$EXP_TS" ]]; then
-                    pkill -KILL -u "$user"
-                    userdel -f -r "$user" 2>/dev/null
-                    sed -i "/^$user|/d" "$DB"
-                    continue
-                fi
-            fi
+def log_event(message):
+    try:
+        with open(LOG_FILE, "a") as f:
+            f.write(f"{datetime.datetime.now()} - {message}\n")
+    except: pass
 
-            # 2. Multi-Login Check (Kick Only)
-            if [[ "$user" == "root" ]]; then continue; fi
-            c_ssh=$(pgrep -u "$user" "sshd" | wc -l)
-            c_drop=$(pgrep -u "$user" "dropbear" | wc -l)
-            TOTAL=$((c_ssh + c_drop))
-            
-            if [[ "$TOTAL" -gt "$MAX_LOGIN" ]]; then
-                pkill -KILL -u "$user"
-            fi
-        done < "$DB"
-    fi
-done
+def count_connections(user):
+    try:
+        # Count SSH and Dropbear connections
+        cmd = f"pgrep -u {user} | grep -E 'sshd|dropbear' | wc -l"
+        result = subprocess.check_output(cmd, shell=True)
+        return int(result.strip())
+    except:
+        return 0
+
+def check_loop():
+    while True:
+        if os.path.exists(DB_FILE):
+            try:
+                with open(DB_FILE, 'r') as f:
+                    lines = f.readlines()
+                
+                new_lines = []
+                status_changed = False
+                now = datetime.datetime.now()
+
+                for line in lines:
+                    parts = line.strip().split('|')
+                    if len(parts) < 3: 
+                        continue
+                    
+                    user = parts[0]
+                    exp_date = parts[1]
+                    exp_time = parts[2]
+
+                    # Skip Admin/System Users
+                    if "V93" in user or "Turbo" in user or user == "root":
+                        new_lines.append(line)
+                        continue
+
+                    # --- 1. PRECISION EXPIRY CHECK ---
+                    expired = False
+                    if exp_date.lower() != "never":
+                        try:
+                            # Parse Exact Time
+                            if not exp_time: exp_time = "23:59"
+                            expiry_str = f"{exp_date} {exp_time}"
+                            expiry_moment = datetime.datetime.strptime(expiry_str, "%Y-%m-%d %H:%M")
+                            
+                            if now >= expiry_moment:
+                                # KILL & DELETE
+                                subprocess.run(f"pkill -KILL -u {user}", shell=True)
+                                subprocess.run(f"userdel -f -r {user}", shell=True)
+                                log_event(f"EXPIRED: User {user} deleted automatically.")
+                                status_changed = True
+                                expired = True # Do not append to new_lines
+                        except Exception as e:
+                            log_event(f"Date Error for {user}: {e}")
+
+                    if expired:
+                        continue # Skip appending this line (effectively deleting it from DB)
+
+                    # --- 2. MULTI-LOGIN CHECK ---
+                    try:
+                        active_cons = 0
+                        # pgrep returns all PIDs, we count how many belong to sshd/dropbear
+                        # Alternative simple method:
+                        p1 = subprocess.getoutput(f"pgrep -u {user} sshd | wc -l")
+                        p2 = subprocess.getoutput(f"pgrep -u {user} dropbear | wc -l")
+                        total = int(p1) + int(p2)
+                        
+                        if total > MAX_LOGIN:
+                            subprocess.run(f"pkill -KILL -u {user}", shell=True)
+                            log_event(f"KICK: User {user} exceeded max logins ({total})")
+                    except: pass
+
+                    new_lines.append(line)
+
+                # Update Database if users were deleted
+                if status_changed:
+                    with open(DB_FILE, 'w') as f:
+                        f.writelines(new_lines)
+
+            except Exception as e:
+                log_event(f"Monitor Loop Error: {e}")
+        
+        time.sleep(3) # Check every 3 seconds
+
+if __name__ == "__main__":
+    check_loop()
 EOF
+
 chmod +x "$MONITOR_SCRIPT"
-if ! pgrep -f "kp_monitor.sh" > /dev/null; then nohup "$MONITOR_SCRIPT" >/dev/null 2>&1 & fi
+if ! pgrep -f "kp_monitor.py" > /dev/null; then nohup python3 "$MONITOR_SCRIPT" >/dev/null 2>&1 & fi
 
 # ==================================================
 #  CLI FUNCTIONS
@@ -98,7 +166,7 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 draw_header() {
     clear
     echo -e "${CYAN}==================================================${NC}"
-    echo -e "           ${WHITE}SSH MANAGER V93 (PREMIUM)${NC}"
+    echo -e "           ${WHITE}SSH MANAGER V94 (PREMIUM)${NC}"
     echo -e "${CYAN}==================================================${NC}"
 }
 
@@ -123,7 +191,7 @@ fun_create() {
     fi
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V93" >> "$USER_DB"
+    echo "$u|$d|$t|V94" >> "$USER_DB"
     echo -e "${GREEN}✅ CREATED: $u${NC}"; pause
 }
 
@@ -194,12 +262,12 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V93 PREMIUM)
+#  🤖 BOT INSTALLER (V94 PREMIUM)
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${YELLOW}INSTALLING BOT V93...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT V94...${NC}"
     
     # Dependencies
     if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
@@ -216,7 +284,7 @@ fun_install_bot() {
     
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
-Description=SSH Bot V93
+Description=SSH Bot V94
 After=network.target network-online.target
 [Service]
 ExecStart=/usr/bin/python3 /root/ssh_bot.py
@@ -266,7 +334,7 @@ def get_main_menu():
 
 def start(update: Update, context: CallbackContext):
     if update.effective_user.id != ADMIN_ID: return
-    try: update.message.reply_text("💎 *SSH MANAGER V93*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+    try: update.message.reply_text("💎 *SSH MANAGER V94*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
     except: pass
 
 def btn(update: Update, context: CallbackContext):
@@ -277,7 +345,7 @@ def btn(update: Update, context: CallbackContext):
     
     if data == 'back': 
         context.user_data.clear()
-        q.edit_message_text("💎 *SSH MANAGER V93*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+        q.edit_message_text("💎 *SSH MANAGER V94*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
         return
 
     try:
@@ -393,7 +461,7 @@ def main():
 if __name__ == '__main__': main()
 EOF
     systemctl daemon-reload; systemctl enable sshbot; systemctl start sshbot
-    echo -e "${GREEN}✅ BOT V93 INSTALLED!${NC}"; pause
+    echo -e "${GREEN}✅ BOT V94 INSTALLED!${NC}"; pause
 }
 
 # --- MAIN LOOP ---
