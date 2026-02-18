@@ -1,10 +1,9 @@
 #!/bin/bash
 # ==================================================
 #  SSH MANAGER V93 (PREMIUM ENGLISH) 💎
-#  - FIXED: Monitor list layout (No more 'Turbo/None' bugs)
+#  - FIXED: Syntax Errors & Missing Functions
 #  - LANG: 100% Professional English
-#  - MODE: Auto-Sequence Users (USER1, USER2...)
-#  - ENGINE: 3-Second War Mode (Instant Kick) ⚔️
+#  - MODE: Auto-Sequence Users
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -32,7 +31,7 @@ MONITOR_SCRIPT="/usr/local/bin/kp_monitor.sh"
 LOG_FILE="/var/log/kp_manager.log"
 BACKUP_DIR="/root/backups"
 
-# --- ⚠️ CREDENTIALS (PUT YOUR INFO HERE) ⚠️ ---
+# --- CREDENTIALS ---
 MY_TOKEN="8275679858:AAGCTP9tsJzCgzXXzgA9hJQ8ooqhlFY8BcA"
 MY_ID="7587310857"
 
@@ -44,7 +43,7 @@ mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  🛡️ MONITOR ENGINE (WAR MODE: 3 SECONDS)
+#  🛡️ MONITOR ENGINE (WAR MODE)
 # ==================================================
 pkill -f kp_monitor.sh
 cat > "$MONITOR_SCRIPT" << 'EOF'
@@ -178,6 +177,22 @@ fun_list() {
     done < "$USER_DB"; pause
 }
 
+fun_backup() {
+    draw_header; echo -e "                ${WHITE}BACKUP DATA${NC}"; echo -e "${CYAN}==================================================${NC}"
+    echo -e "${YELLOW}Creating Backup...${NC}"
+    cp "$USER_DB" "$BACKUP_DIR/users_backup_$(date +%F).txt"
+    echo -e "${GREEN}✅ Backup Saved in $BACKUP_DIR${NC}"
+    pause
+}
+
+fun_settings() {
+    draw_header; echo -e "                ${WHITE}SETTINGS${NC}"; echo -e "${CYAN}==================================================${NC}"
+    echo -e " [1] Install/Update Bot"
+    echo -e " [2] Back"
+    read -p " SELECT: " s
+    if [[ "$s" == "1" ]]; then fun_install_bot; fi
+}
+
 # ==================================================
 #  🤖 BOT INSTALLER (V93 PREMIUM)
 # ==================================================
@@ -185,11 +200,19 @@ fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
     clear; echo -e "${YELLOW}INSTALLING BOT V93...${NC}"
+    
+    # Dependencies
+    if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
+        apt-get update -y >/dev/null 2>&1
+        apt-get install -y python3 python3-pip >/dev/null 2>&1
+    else
+        yum install -y python3 python3-pip >/dev/null 2>&1
+    fi
+    pip3 install python-telegram-bot==13.7 schedule >/dev/null 2>&1
+
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
-    eval "$CMD python3 python3-pip" >/dev/null 2>&1
-    pip3 install python-telegram-bot==13.7 schedule >/dev/null 2>&1
     
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
