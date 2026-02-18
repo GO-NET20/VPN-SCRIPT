@@ -1,10 +1,10 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V97 (ULTIMATE EDITION) 💎
-#  - ALL FEATURES INCLUDED
-#  - TIMEZONE: Africa/Tunis Support
-#  - MIGRATION: Export/Import Users System
-#  - BOT: Stable Python Code
+#  SSH MANAGER V99 (FULL SYNC EDITION) 💎
+#  - BOT & CLI ARE NOW 100% IDENTICAL
+#  - ADDED: Migration Button in Bot
+#  - ADDED: Full Date/Time in Bot List
+#  - FIXED: Library Conflicts & Python Logic
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -33,7 +33,7 @@ LOG_FILE="/var/log/kp_manager.log"
 BACKUP_DIR="/root/backups"
 MIGRATION_FILE="/root/migration_users.txt"
 
-# --- CREDENTIALS (CHANGE THESE) ---
+# --- CREDENTIALS ---
 MY_TOKEN="8134717950:AAGj2wWaABBUWbPLa7jX6yEWHgwjgUelpwg"
 MY_ID="7587310857"
 
@@ -90,7 +90,6 @@ def check_loop():
                     exp_date = parts[1]
                     exp_time = parts[2]
 
-                    # Skip Admin/System Users
                     if "V9" in user or "Turbo" in user or user == "root":
                         new_lines.append(line)
                         continue
@@ -151,7 +150,7 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 draw_header() {
     clear
     echo -e "${CYAN}==================================================${NC}"
-    echo -e "           ${WHITE}SSH MANAGER V97 (ULTIMATE)${NC}"
+    echo -e "           ${WHITE}SSH MANAGER V99 (FULL SYNC)${NC}"
     echo -e "${CYAN}==================================================${NC}"
 }
 
@@ -162,8 +161,10 @@ fun_create() {
     i=1
     while true; do
         u="USER${i}"
-        if ! id "$u" &>/dev/null; then break; fi
-        ((i++))
+        # Robust check: System OR DB
+        if id "$u" &>/dev/null; then ((i++)); continue; fi
+        if grep -q "^$u|" "$USER_DB"; then ((i++)); continue; fi
+        break
     done
     p="12345"
     echo -e " 👤 USER : ${GREEN}$u${NC}"
@@ -176,7 +177,7 @@ fun_create() {
     fi
     useradd -M -s /bin/false "$u"
     echo "$u:$p" | chpasswd
-    echo "$u|$d|$t|V97" >> "$USER_DB"
+    echo "$u|$d|$t|V99" >> "$USER_DB"
     echo -e "${GREEN}✅ CREATED: $u${NC}"; pause
 }
 
@@ -198,7 +199,9 @@ fun_remove() {
     read -p " 👤 USERNAME : " u
     read -p " ⚠️ CONFIRM? [y/n]: " c
     if [[ "$c" == "y" ]]; then
-        pkill -u "$u"; userdel -f -r "$u"; sed -i "/^$u|/d" "$USER_DB"
+        pkill -u "$u"
+        userdel -f -r "$u" 2>/dev/null
+        sed -i "/^$u|/d" "$USER_DB"
         echo -e "${RED}🗑️ DELETED${NC}"
     fi
     pause
@@ -216,18 +219,21 @@ fun_lock() {
 
 fun_list() {
     draw_header; echo -e "                ${WHITE}USER LIST${NC}"; echo -e "${CYAN}==================================================${NC}"
-    printf "%-12s | %-12s\n" "USER" "STATUS"
-    echo "--------------------------------"
+    printf "%-12s | %-18s | %-10s\n" "USER" "EXPIRY DATE" "STATUS"
+    echo "------------------------------------------------"
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
         if id "$u" &>/dev/null; then
              if ps -ef | grep "sshd: $u" | grep -v grep > /dev/null 2>&1 || pgrep -u "$u" > /dev/null 2>&1; then
-                printf "%-12s | ${GREEN}ON${NC}\n" "$u"
+                STATUS="${GREEN}ON${NC}"
              else
-                printf "%-12s | ${RED}OFF${NC}\n" "$u"
+                STATUS="${RED}OFF${NC}"
              fi
+             [[ "$d" == "NEVER" ]] && DATE_STR="NEVER" || DATE_STR="$d $t"
+             printf "%-12s | %-18s | ${STATUS}\n" "$u" "$DATE_STR"
         fi
-    done < "$USER_DB"; pause
+    done < "$USER_DB"
+    echo ""; pause
 }
 
 fun_backup() {
@@ -238,79 +244,44 @@ fun_backup() {
     pause
 }
 
-# --- 🚀 MIGRATION FUNCTIONS (EXPORT/IMPORT) ---
+# --- 🚀 MIGRATION FUNCTIONS ---
 fun_export_users() {
     draw_header
-    echo -e "${YELLOW}EXPORTING USERS FOR MIGRATION...${NC}"
+    echo -e "${YELLOW}EXPORTING USERS...${NC}"
     cp "$USER_DB" "$MIGRATION_FILE"
-    echo -e ""
-    echo -e "${GREEN}✅ EXPORT SUCCESSFUL!${NC}"
-    echo -e "${CYAN}--------------------------------------------------${NC}"
-    echo -e "File location: ${WHITE}$MIGRATION_FILE${NC}"
-    echo -e "${CYAN}--------------------------------------------------${NC}"
-    echo -e "1. Download this file."
-    echo -e "2. Upload to new server at: /root/migration_users.txt"
-    echo -e "3. Run this script on new server -> Option 8 -> Restore."
+    echo -e "${GREEN}✅ EXPORT SUCCESSFUL!${NC} File: $MIGRATION_FILE"
     pause
 }
 
 fun_import_users() {
     draw_header
-    echo -e "${YELLOW}RESTORING USERS FROM MIGRATION FILE...${NC}"
-    
-    if [[ ! -f "$MIGRATION_FILE" ]]; then
-        echo -e "${RED}❌ FILE NOT FOUND ($MIGRATION_FILE)${NC}"
-        pause; return
-    fi
-
-    echo -e "Reading file..."
+    echo -e "${YELLOW}RESTORING USERS...${NC}"
+    if [[ ! -f "$MIGRATION_FILE" ]]; then echo -e "${RED}❌ FILE NOT FOUND${NC}"; pause; return; fi
     count=0
-    
-    # Process the file
     while IFS='|' read -r u d t tag; do
         [[ -z "$u" ]] && continue
-        
-        # Check if user exists in Linux system
-        if id "$u" &>/dev/null; then
-            echo -e "User $u exists... ${YELLOW}Skipping${NC}"
-        else
-            # Re-create the user in Linux
-            useradd -M -s /bin/false "$u"
-            # Set Default Password (12345)
-            echo "$u:12345" | chpasswd
-            echo -e "Created: ${GREEN}$u${NC} (Pass: 12345)"
-            ((count++))
+        if id "$u" &>/dev/null; then echo -e "User $u exists... ${YELLOW}Skipping${NC}"; else
+            useradd -M -s /bin/false "$u"; echo "$u:12345" | chpasswd
+            echo -e "Created: ${GREEN}$u${NC}"; ((count++))
         fi
     done < "$MIGRATION_FILE"
-
-    # Restore Database File
     cat "$MIGRATION_FILE" > "$USER_DB"
-
-    echo -e "${CYAN}--------------------------------------------------${NC}"
-    echo -e "${GREEN}✅ MIGRATION COMPLETE!${NC}"
-    echo -e "Restored Users: $count"
-    pause
+    echo -e "${GREEN}✅ RESTORED: $count${NC}"; pause
 }
 
-# --- SETTINGS MENU ---
 fun_settings() {
     while true; do
         draw_header; echo -e "                ${WHITE}SETTINGS${NC}"; echo -e "${CYAN}==================================================${NC}"
         echo -e " [1] Install/Update Bot"
         echo -e " [2] Set Timezone (Africa/Tunis)"
-        echo -e " [3] 📤 EXPORT USERS (Backup for New Server)"
-        echo -e " [4] 📥 RESTORE USERS (On New Server)"
+        echo -e " [3] 📤 EXPORT USERS (Backup)"
+        echo -e " [4] 📥 RESTORE USERS (Restore)"
         echo -e " [5] Back"
         echo -e "${CYAN}--------------------------------------------------${NC}"
         read -p " SELECT: " s
         case "$s" in
             1) fun_install_bot ;;
-            2) 
-                timedatectl set-timezone Africa/Tunis
-                echo -e "${GREEN}✅ Timezone set to Africa/Tunis${NC}"
-                echo -e "Current time: $(date)"
-                pause
-                ;;
+            2) timedatectl set-timezone Africa/Tunis; echo -e "${GREEN}✅ Timezone set to Tunis${NC}"; pause ;;
             3) fun_export_users ;;
             4) fun_import_users ;;
             5) break ;;
@@ -320,20 +291,19 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V97)
+#  🤖 BOT INSTALLER (V99 FULL SYNC)
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${YELLOW}INSTALLING BOT V97...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT V99...${NC}"
     
+    pip3 uninstall -y python-telegram-bot telegram >/dev/null 2>&1
     if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
-        apt-get update -y >/dev/null 2>&1
-        apt-get install -y python3 python3-pip >/dev/null 2>&1
+        apt-get update -y >/dev/null 2>&1; apt-get install -y python3 python3-pip >/dev/null 2>&1
     else
         yum install -y python3 python3-pip >/dev/null 2>&1
     fi
-    
     pip3 install python-telegram-bot==13.7 schedule >/dev/null 2>&1
 
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
@@ -342,7 +312,7 @@ fun_install_bot() {
     
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
-Description=SSH Bot V97
+Description=SSH Bot V99
 After=network.target network-online.target
 [Service]
 ExecStart=/usr/bin/python3 /root/ssh_bot.py
@@ -352,19 +322,16 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
 
-    # PYTHON BOT SCRIPT
+    # PYTHON BOT SCRIPT (FULL FEATURES)
     cat > /root/ssh_bot.py << 'EOF'
-import logging
-import os
-import subprocess
-import time
+import logging, os, subprocess
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
 
 logging.basicConfig(filename='/var/log/sshbot.log', level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-
 CONF_FILE = "/etc/xpanel/bot.conf"
 DB_FILE = "/etc/xpanel/users_db.txt"
+MIGRATION_FILE = "/root/migration_users.txt"
 
 def load_config():
     config = {}
@@ -375,10 +342,7 @@ def load_config():
     except: pass
     return config
 
-cfg = load_config()
-TOKEN = cfg.get("BOT_TOKEN")
-try: ADMIN_ID = int(cfg.get("ADMIN_ID", 0))
-except: ADMIN_ID = 0
+cfg = load_config(); TOKEN = cfg.get("BOT_TOKEN"); ADMIN_ID = int(cfg.get("ADMIN_ID", 0))
 
 def get_status(u):
     try:
@@ -392,25 +356,31 @@ def get_main_menu():
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👤 ADD USER (AUTO)", callback_data='add')],
         [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ DELETE", callback_data='del')],
-        [InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock')],
-        [InlineKeyboardButton("📋 USER LIST", callback_data='list'), InlineKeyboardButton("⚡ MONITOR", callback_data='onl')],
-        [InlineKeyboardButton("💾 BACKUP", callback_data='bak'), InlineKeyboardButton("⚙️ SETTINGS", callback_data='set')]
+        [InlineKeyboardButton("🔒 LOCK", callback_data='lock'), InlineKeyboardButton("🔓 UNLOCK", callback_data='unlock_menu')],
+        [InlineKeyboardButton("📋 LIST", callback_data='list'), InlineKeyboardButton("⚡ MONITOR", callback_data='onl')],
+        [InlineKeyboardButton("📦 BACKUP", callback_data='bak'), InlineKeyboardButton("🚀 MIGRATION", callback_data='migrate')]
     ])
 
 def start(update: Update, context: CallbackContext):
     if update.effective_user.id != ADMIN_ID: return
-    update.message.reply_text("💎 *SSH MANAGER V97*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
+    update.message.reply_text("💎 *SSH MANAGER V99*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu())
 
 def button_handler(update: Update, context: CallbackContext):
     q = update.callback_query; q.answer(); data = q.data
-    if data == 'back': context.user_data.clear(); q.edit_message_text("💎 *SSH MANAGER V97*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu()); return
+    if data == 'back': context.user_data.clear(); q.edit_message_text("💎 *SSH MANAGER V99*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_main_menu()); return
 
     try:
         if data == 'add':
             i = 1
             while True:
                 u = f"USER{i}"
-                if subprocess.run(f"id {u}", shell=True).returncode != 0: break
+                # Check System AND File
+                sys_check = subprocess.run(f"id {u}", shell=True).returncode
+                file_check = False
+                if os.path.exists(DB_FILE):
+                     if f"{u}|" in open(DB_FILE).read(): file_check = True
+                
+                if sys_check != 0 and not file_check: break
                 i += 1
             context.user_data['nu'] = u; context.user_data['np'] = "12345"; context.user_data['act'] = 'a_date'
             q.edit_message_text(f"👤 *NEW USER:* `{u}`\n🔑 *PASS:* `12345`\n\n📅 *ENTER DATE (YYYY-MM-DD):*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
@@ -418,26 +388,32 @@ def button_handler(update: Update, context: CallbackContext):
         elif data == 'ren': context.user_data['act'] = 'r1'; q.edit_message_text("🔄 *ENTER USERNAME:*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
         elif data == 'del': context.user_data['act'] = 'd1'; q.edit_message_text("🗑️ *ENTER USERNAME:*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
         elif data == 'del_yes':
-            u = context.user_data.get('del_u'); subprocess.run(f"pkill -u {u}", shell=True); subprocess.run(f"userdel -f -r {u}", shell=True)
-            if os.path.exists(DB_FILE):
-                lines = open(DB_FILE).readlines()
-                with open(DB_FILE, 'w') as f:
-                    for l in lines: 
-                        if not l.startswith(f"{u}|"): f.write(l)
-            q.edit_message_text(f"✅ *USER {u} DELETED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+            u = context.user_data.get('del_u')
+            if u:
+                subprocess.run(f"pkill -u {u}", shell=True); subprocess.run(f"userdel -f -r {u}", shell=True)
+                if os.path.exists(DB_FILE):
+                    lines = open(DB_FILE).readlines()
+                    with open(DB_FILE, 'w') as f:
+                        for l in lines: 
+                            if not l.startswith(f"{u}|"): f.write(l)
+                q.edit_message_text(f"✅ *USER {u} DELETED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
 
-        elif data == 'lock': context.user_data['act'] = 'l1'; q.edit_message_text("🔒 *ENTER USERNAME:*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+        elif data == 'lock': context.user_data['act'] = 'l1'; q.edit_message_text("🔒 *ENTER USERNAME TO LOCK:*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+        elif data == 'unlock_menu': context.user_data['act'] = 'ul1'; q.edit_message_text("🔓 *ENTER USERNAME TO UNLOCK:*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+        
         elif data == 'do_lock': u = context.user_data.get('lock_u'); subprocess.run(f"usermod -L {u}", shell=True); subprocess.run(f"pkill -KILL -u {u}", shell=True); q.edit_message_text(f"⛔ *USER {u} LOCKED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
         elif data == 'do_unlock': u = context.user_data.get('lock_u'); subprocess.run(f"usermod -U {u}", shell=True); q.edit_message_text(f"🟢 *USER {u} UNLOCKED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
 
         elif data == 'list':
-            body = "👤 *USER* | 📅 *EXPIRY*\n---------------------------\n"
+            body = "👤 *USER* | 📅 *EXPIRY* | *ST*\n-----------------------------------\n"
             if os.path.exists(DB_FILE):
                 with open(DB_FILE) as f:
                     for l in f:
-                        parts = l.split('|')
-                        if len(parts) < 2 or "Turbo" in l: continue
-                        body += f"`{parts[0]:<12}` | {parts[1]}\n"
+                        parts = l.strip().split('|')
+                        if len(parts) < 3 or "Turbo" in l: continue
+                        # Format: User | Date Time | Status
+                        st = "🟢" if "🟢" in get_status(parts[0]) else "🔴"
+                        body += f"`{parts[0]:<10}` | {parts[1]} {parts[2]} | {st}\n"
             q.edit_message_text(body, parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
 
         elif data == 'onl':
@@ -453,12 +429,16 @@ def button_handler(update: Update, context: CallbackContext):
 
         elif data == 'bak':
             if os.path.exists(DB_FILE): context.bot.send_document(chat_id=ADMIN_ID, document=open(DB_FILE, 'rb'))
-            q.edit_message_text("✅ *BACKUP SENT!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+            q.edit_message_text("✅ *DATABASE BACKUP SENT!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
 
-        elif data == 'set': 
-            kb = [[InlineKeyboardButton("♻️ UPDATE BOT", callback_data='ins')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]]
-            q.edit_message_text("⚙️ *SETTINGS*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup(kb))
-        elif data == 'ins': subprocess.Popen("systemctl restart sshbot", shell=True); q.edit_message_text("♻️ *RESTARTING...*", parse_mode=ParseMode.MARKDOWN)
+        elif data == 'migrate':
+            # Create the migration file
+            if os.path.exists(DB_FILE):
+                subprocess.run(f"cp {DB_FILE} {MIGRATION_FILE}", shell=True)
+                context.bot.send_document(chat_id=ADMIN_ID, document=open(MIGRATION_FILE, 'rb'), caption="🚀 *MIGRATION FILE*\n\n1. Download file\n2. Upload to new server at `/root/migration_users.txt`\n3. Run Restore in CLI.", parse_mode=ParseMode.MARKDOWN)
+                q.edit_message_text("✅ *MIGRATION FILE SENT!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+            else:
+                 q.edit_message_text("❌ *NO DATABASE FOUND!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
 
     except Exception as e: logging.error(f"Btn: {e}")
 
@@ -469,32 +449,44 @@ def txt(update: Update, context: CallbackContext):
         if act == 'a_date': context.user_data.update({'nd': msg, 'act': 'a_time'}); update.message.reply_text("⏰ *ENTER TIME (HH:MM):*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
         elif act == 'a_time':
             u = context.user_data.get('nu'); p = context.user_data.get('np'); d = context.user_data['nd']
-            subprocess.run(f"useradd -M -s /bin/false {u}", shell=True); subprocess.run(f"echo '{u}:{p}' | chpasswd", shell=True)
-            with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{msg}|Bot\n")
-            update.message.reply_text(f"✅ *CREATED:*\n👤 `{u}`\n🔑 `{p}`", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+            if u:
+                subprocess.run(f"useradd -M -s /bin/false {u}", shell=True); subprocess.run(f"echo '{u}:{p}' | chpasswd", shell=True)
+                with open(DB_FILE, 'a') as f: f.write(f"{u}|{d}|{msg}|Bot\n")
+                update.message.reply_text(f"✅ *CREATED:*\n👤 `{u}`\n🔑 `{p}`\n📅 {d} {msg}", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+        
         elif act == 'r1': context.user_data.update({'ru': msg, 'act': 'r2'}); update.message.reply_text("📅 *NEW DATE:*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
         elif act == 'r2': context.user_data.update({'rd': msg, 'act': 'r3'}); update.message.reply_text("⏰ *NEW TIME:*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
         elif act == 'r3':
-            u = context.user_data['ru']; lines = open(DB_FILE).readlines()
-            with open(DB_FILE, 'w') as f:
-                for l in lines:
-                    if not l.startswith(f"{u}|"): f.write(l)
-                f.write(f"{u}|{context.user_data['rd']}|{msg}|Renew\n")
-            update.message.reply_text("✅ *RENEWED!*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+            u = context.user_data.get('ru')
+            if u and os.path.exists(DB_FILE):
+                lines = open(DB_FILE).readlines()
+                with open(DB_FILE, 'w') as f:
+                    for l in lines:
+                        if not l.startswith(f"{u}|"): f.write(l)
+                    f.write(f"{u}|{context.user_data['rd']}|{msg}|Renew\n")
+                update.message.reply_text(f"✅ *RENEWED: {u}*", parse_mode=ParseMode.MARKDOWN, reply_markup=get_back_btn())
+        
         elif act == 'd1': context.user_data['del_u'] = msg; update.message.reply_text(f"⚠️ *DELETE {msg}?*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("YES", callback_data='del_yes'), InlineKeyboardButton("NO", callback_data='back')]]))
-        elif act == 'l1': context.user_data['lock_u'] = msg; update.message.reply_text(f"⚙️ *MANAGE {msg}*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("LOCK", callback_data='do_lock'), InlineKeyboardButton("UNLOCK", callback_data='do_unlock')], [InlineKeyboardButton("BACK", callback_data='back')]]))
+        elif act == 'l1': context.user_data['lock_u'] = msg; update.message.reply_text(f"⚙️ *LOCK {msg}?*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("CONFIRM LOCK", callback_data='do_lock'), InlineKeyboardButton("BACK", callback_data='back')]]))
+        elif act == 'ul1': context.user_data['lock_u'] = msg; update.message.reply_text(f"⚙️ *UNLOCK {msg}?*", parse_mode=ParseMode.MARKDOWN, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("CONFIRM UNLOCK", callback_data='do_unlock'), InlineKeyboardButton("BACK", callback_data='back')]]))
+
     except: pass
 
 def main():
     if not TOKEN: return
-    up = Updater(TOKEN, use_context=True); dp = up.dispatcher
-    dp.add_handler(CommandHandler("start", start)); dp.add_handler(CallbackQueryHandler(button_handler)); dp.add_handler(MessageHandler(Filters.text, txt))
-    up.start_polling(); up.idle()
+    try:
+        up = Updater(TOKEN, use_context=True); dp = up.dispatcher
+        dp.add_handler(CommandHandler("start", start))
+        dp.add_handler(CallbackQueryHandler(button_handler))
+        dp.add_handler(MessageHandler(Filters.text, txt))
+        up.start_polling()
+        up.idle()
+    except Exception as e: logging.error(f"Main: {e}")
 
 if __name__ == '__main__': main()
 EOF
     systemctl daemon-reload; systemctl enable sshbot; systemctl restart sshbot
-    echo -e "${GREEN}✅ BOT V97 INSTALLED!${NC}"; pause
+    echo -e "${GREEN}✅ BOT V99 INSTALLED!${NC}"; pause
 }
 
 # --- MAIN LOOP ---
@@ -505,9 +497,9 @@ while true; do
     echo -e " ${GREEN}[03]${NC} 🗑️ REMOVE ACCOUNT"
     echo -e " ${GREEN}[04]${NC} 🔐 LOCK ACCOUNT"
     echo -e " ${GREEN}[05]${NC} 📋 LIST ACCOUNTS"
-    echo -e " ${GREEN}[06]${NC} ⚡ MONITOR USERS"
+    echo -e " ${GREEN}[06]${NC} 🔘 MONITOR USERS"
     echo -e " ${GREEN}[07]${NC} 💾 BACKUP DATA"
-    echo -e " ${GREEN}[08]${NC} ⚙️ SETTINGS (MIGRATION)"
+    echo -e " ${GREEN}[08]${NC} ⚙️ SETTINGS (MIGRATION/BOT)"
     echo -e " ${GREEN}[00]${NC} 🚪 EXIT"
     echo ""
     echo -e "${CYAN}==================================================${NC}"
