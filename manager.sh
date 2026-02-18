@@ -1,10 +1,10 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V123 (THE BOLD UI EDITION) 💎
-#  - NEW CLI DESIGN: THICK FLAT LINES (━━━━━)
-#  - ALL MENUS CAPITALIZED FOR PREMIUM LOOK
-#  - EXACT BOT CREATION MESSAGE & CLEAN FLAT UI
-#  - FIXED: 3-SECOND MULTI-LOGIN MONITOR (Bulletproof)
+#  SSH MANAGER V124 (THE PERFECT LAYOUT) 💎
+#  - EXACT TELEGRAM BUTTON LAYOUT FROM IMAGE
+#  - CHANGED ALL LINES TO "==================="
+#  - COMBINED LOCK/UNLOCK MENU IN BOT
+#  - ADDED 🔘 EMOJI TO MONITOR
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -38,11 +38,10 @@ MIGRATION_FILE="/root/migration_users.txt"
 MY_TOKEN="8134717950:AAGj2wWaABBUWbPLa7jX6yEWHgwjgUelpwg"
 MY_ID="7587310857"
 
-# --- 3. COLORS & NEW BOLD LINE ---
+# --- 3. COLORS & EXACT LINE STYLE ---
 RED='\033[1;31m'; GREEN='\033[1;32m'; YELLOW='\033[1;33m'
 PURPLE='\033[1;35m'; CYAN='\033[1;36m'; NC='\033[0m'; WHITE='\033[1;37m'
-# The EXACT thick line requested
-LINE="${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+LINE="${PURPLE}===============================================${NC}"
 
 mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
@@ -118,7 +117,6 @@ def check_loop():
                     if "V1" in user or "Turbo" in user or user == "root":
                         new_lines.append(line); continue
 
-                    # 1. EXPIRY CHECK
                     expired = False
                     if exp_date.lower() != "never":
                         try:
@@ -134,7 +132,6 @@ def check_loop():
 
                     if expired: continue
 
-                    # 2. MULTI-LOGIN CHECK
                     try:
                         ssh_procs = subprocess.getoutput(f"ps -u {user} -o comm= 2>/dev/null | grep -c sshd")
                         drop_procs = subprocess.getoutput(f"ps -u {user} -o comm= 2>/dev/null | grep -c dropbear")
@@ -186,7 +183,7 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 draw_header() {
     clear
     echo -e "${LINE}"
-    echo -e "         💎 ${WHITE}SSH MANAGER V123${NC} 💎"
+    echo -e "           ⚡ ${WHITE}SSH MANAGER V124${NC} ⚡"
     echo -e "${LINE}"
 }
 
@@ -211,27 +208,27 @@ fun_create() {
     
     useradd -M -s /bin/false "$u" >/dev/null 2>&1
     echo "$u:$p" | chpasswd >/dev/null 2>&1
-    echo "$u|$d|$t|V123" >> "$USER_DB"
+    echo "$u|$d|$t|V124" >> "$USER_DB"
     
     clear
-    echo -e "${PURPLE}============================${NC}"
-    echo -e "                      ${WHITE}ACCOUNT${NC} "
-    echo -e "${PURPLE}============================${NC}"
+    echo -e "${LINE}"
+    echo -e "                    ${WHITE}ACCOUNT${NC} "
+    echo -e "${LINE}"
     echo -e ""
     echo -e " 👤 Username : ${WHITE}$u${NC}"
     echo -e " 🔑 Password : ${WHITE}$p${NC}"
     echo -e " 📅 Expiry   : ${WHITE}$d${NC}"
     echo -e " ⏰ Time     : ${WHITE}$t${NC}"
     echo -e ""
-    echo -e "${PURPLE}============================${NC}"
+    echo -e "${LINE}"
     echo -e " 📋 Copy     : ${WHITE}$u:$p${NC}"
-    echo -e "${PURPLE}============================${NC}"
+    echo -e "${LINE}"
     pause
 }
 
 fun_renew() {
     draw_header
-    echo -e "            🔄 ${WHITE}RENEW USER${NC}"
+    echo -e "               🔄 ${WHITE}RENEW USER${NC}"
     echo -e "${LINE}"
     read -p " 👤 USERNAME : " u
     if ! grep -q "^$u|" "$USER_DB"; then echo -e "${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
@@ -248,7 +245,7 @@ fun_renew() {
 
 fun_remove() {
     draw_header
-    echo -e "            🗑️ ${WHITE}DELETE USER${NC}"
+    echo -e "               🗑️ ${WHITE}DELETE USER${NC}"
     echo -e "${LINE}"
     read -p " 👤 USERNAME : " u
     read -p " ⚠️ CONFIRM? [Y/N]: " c
@@ -263,7 +260,7 @@ fun_remove() {
 
 fun_lock() {
     draw_header
-    echo -e "            🔒 ${WHITE}LOCK/UNLOCK${NC}"
+    echo -e "               🔒 ${WHITE}LOCK/UNLOCK${NC}"
     echo -e "${LINE}"
     read -p " 👤 USERNAME : " u
     echo " [1] LOCK ⛔"
@@ -280,7 +277,7 @@ fun_lock() {
 fun_list() {
     clear
     echo -e "${LINE}"
-    echo -e "           📋 ${WHITE}LIST ACCOUNTS${NC}"
+    echo -e "               📋 ${WHITE}ALL USERS${NC}"
     echo -e "${LINE}"
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
@@ -297,7 +294,7 @@ fun_list() {
 fun_monitor_view() {
     clear
     echo -e "${LINE}"
-    echo -e "           ⚡ ${WHITE}LIVE MONITOR${NC}"
+    echo -e "               🔘 ${WHITE}LIVE MONITOR${NC}"
     echo -e "${LINE}"
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
@@ -316,7 +313,7 @@ fun_monitor_view() {
 
 fun_backup() {
     draw_header
-    echo -e "           📦 ${WHITE}LOCAL BACKUP${NC}"
+    echo -e "               💾 ${WHITE}SAVE DATA${NC}"
     echo -e "${LINE}"
     cp "$USER_DB" "$BACKUP_DIR/users_backup_$(date +%F).txt"
     echo -e "${GREEN} ✅ BACKUP SAVED IN $BACKUP_DIR${NC}"
@@ -347,7 +344,7 @@ fun_import_users() {
 fun_settings() {
     while true; do
         draw_header
-        echo -e "       ⚙️ ${WHITE}SETTINGS & MIGRATION${NC}"
+        echo -e "            ⚙️ ${WHITE}SETTINGS MANAGER${NC}"
         echo -e "${LINE}"
         echo -e " ${GREEN}[1]${NC} 🤖 INSTALL BOT"
         echo -e " ${GREEN}[2]${NC} 🌍 SET TIMEZONE"
@@ -369,7 +366,7 @@ fun_settings() {
 fun_violations() {
     clear
     echo -e "${LINE}"
-    echo -e "       🔔 ${WHITE}MULTI-LOGIN VIOLATIONS${NC}"
+    echo -e "         🔔 ${WHITE}MULTI-LOGIN VIOLATIONS${NC}"
     echo -e "${LINE}"
     echo -e ""
     if [ -f "$LOG_FILE" ]; then
@@ -390,12 +387,12 @@ fun_violations() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER
+#  🤖 BOT INSTALLER (V124 - PERFECT BUTTON LAYOUT)
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${YELLOW}INSTALLING BOT...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT WITH NEW LAYOUT...${NC}"
     
     pip3 uninstall -y python-telegram-bot telegram >/dev/null 2>&1
     
@@ -422,6 +419,7 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(messa
 CONF_FILE = "/etc/xpanel/bot.conf"
 DB_FILE = "/etc/xpanel/users_db.txt"
 MIGRATION_FILE = "/root/migration_users.txt"
+TLINE = "==============================================="
 
 def load_config():
     c = {}
@@ -441,23 +439,33 @@ def get_status(u):
     return "🔴 OFFLINE"
 
 def get_menu():
+    # Exactly matching the user's requested layout from the image
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👤 ADD", callback_data='add'), InlineKeyboardButton("🗑️ DEL", callback_data='del')],
-        [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("📋 LIST", callback_data='list')],
-        [InlineKeyboardButton("🔒 LOCK", callback_data='lock'), InlineKeyboardButton("🔓 UNLOCK", callback_data='unlock')],
-        [InlineKeyboardButton("⚡ MONITOR", callback_data='onl'), InlineKeyboardButton("📦 BACKUP", callback_data='bak')],
-        [InlineKeyboardButton("🚀 MIGRATION", callback_data='migrate')]
+        [InlineKeyboardButton("👤 ADD USER", callback_data='add')],
+        [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ REMOVE", callback_data='del')],
+        [InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock_menu')],
+        [InlineKeyboardButton("📋 ALL USERS", callback_data='list'), InlineKeyboardButton("🔘 MONITOR", callback_data='onl')],
+        [InlineKeyboardButton("💾 SAVE DATA", callback_data='bak')],
+        [InlineKeyboardButton("⚙️ SETTINGS", callback_data='bot_set')]
+    ])
+
+def get_settings_menu():
+    return InlineKeyboardMarkup([
+        [InlineKeyboardButton("💻 Server Info", callback_data='set_info')],
+        [InlineKeyboardButton("🔄 Restart Monitor", callback_data='set_mon')],
+        [InlineKeyboardButton("🚀 Migration", callback_data='migrate')],
+        [InlineKeyboardButton("🔙 BACK", callback_data='back')]
     ])
 
 def get_back_btn():
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
 
 def start(u, c):
-    if u.effective_user.id == ADMIN_ID: u.message.reply_text("💎 <b>X-PANEL V123</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+    if u.effective_user.id == ADMIN_ID: u.message.reply_text(f"⚡ <b>SSH MANAGER V124</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
 def btn(u, c):
     q = u.callback_query; q.answer(); d = q.data
-    if d == 'back': c.user_data.clear(); q.edit_message_text("💎 <b>X-PANEL V123</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
+    if d == 'back': c.user_data.clear(); q.edit_message_text(f"⚡ <b>SSH MANAGER V124</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
 
     try:
         if d == 'add':
@@ -472,11 +480,25 @@ def btn(u, c):
 
         elif d == 'ren': c.user_data['act']='r_date'; q.edit_message_text("🔄 <b>Username to Renew:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif d == 'del': c.user_data['act']='d1'; q.edit_message_text("🗑️ <b>Username to Delete:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
-        elif d == 'lock': c.user_data['act']='l1'; q.edit_message_text("🔒 <b>Username to Lock:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
-        elif d == 'unlock': c.user_data['act']='ul1'; q.edit_message_text("🔓 <b>Username to Unlock:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+        
+        # Combined Lock/Unlock logic
+        elif d == 'lock_menu':
+            c.user_data['act']='lu_user'
+            q.edit_message_text("🔒/🔓 <b>Enter Username to Lock or Unlock:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+
+        elif d.startswith('do_lock_'):
+            usr = d.split('_', 2)[2]
+            subprocess.run(f"usermod -L {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(f"pkill -KILL -u {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            q.edit_message_text(f"⛔ <b>LOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+            
+        elif d.startswith('do_unlock_'):
+            usr = d.split('_', 2)[2]
+            subprocess.run(f"usermod -U {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            q.edit_message_text(f"🔓 <b>UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
         elif d == 'list':
-            body = "📋 <b>LIST ACCOUNTS</b>\n\n"
+            body = f"<b>{TLINE}</b>\n📋 <b>ALL USERS</b>\n<b>{TLINE}</b>\n\n"
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
                     p = l.strip().split('|')
@@ -494,7 +516,7 @@ def btn(u, c):
             q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif d == 'onl':
-            body = "⚡ <b>LIVE MONITOR</b>\n\n"
+            body = f"<b>{TLINE}</b>\n🔘 <b>LIVE MONITOR</b>\n<b>{TLINE}</b>\n\n"
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
                     usr = l.split('|')[0]
@@ -506,13 +528,29 @@ def btn(u, c):
 
         elif d == 'bak':
             if os.path.exists(DB_FILE): c.bot.send_document(ADMIN_ID, open(DB_FILE, 'rb'))
-            q.edit_message_text("✅ <b>SENT!</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+            q.edit_message_text("✅ <b>DATA SAVED & SENT!</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
             
+        elif d == 'bot_set':
+            q.edit_message_text("⚙️ <b>SETTINGS</b>\nChoose an option:", parse_mode=ParseMode.HTML, reply_markup=get_settings_menu())
+            
+        elif d == 'set_info':
+            try:
+                up = subprocess.getoutput("uptime -p")
+                ram = subprocess.getoutput("free -m | awk 'NR==2{printf \"%.2f%%\", $3*100/$2 }'")
+                cpu = subprocess.getoutput("top -bn1 | grep load | awk '{printf \"%.2f%%\", $(NF-2)}'")
+                msg = f"💻 <b>SERVER INFO</b>\n\n⏱ <b>Uptime:</b> {up}\n🧠 <b>RAM:</b> {ram}\n⚙️ <b>CPU Load:</b> {cpu}"
+            except: msg = "💻 <b>SERVER INFO</b>\nError fetching info."
+            q.edit_message_text(msg, parse_mode=ParseMode.HTML, reply_markup=get_settings_menu())
+            
+        elif d == 'set_mon':
+            subprocess.run("systemctl restart kp_monitor", shell=True)
+            q.edit_message_text("✅ <b>Monitor Restarted!</b>", parse_mode=ParseMode.HTML, reply_markup=get_settings_menu())
+
         elif d == 'migrate':
             if os.path.exists(DB_FILE):
                 subprocess.run(f"cp {DB_FILE} {MIGRATION_FILE}", shell=True)
                 c.bot.send_document(ADMIN_ID, open(MIGRATION_FILE, 'rb'), caption="🚀 <b>MIGRATION FILE</b>", parse_mode=ParseMode.HTML)
-                q.edit_message_text("✅ <b>SENT!</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+                q.edit_message_text("✅ <b>MIGRATION FILE SENT!</b>", parse_mode=ParseMode.HTML, reply_markup=get_settings_menu())
 
     except Exception as e: logging.error(e)
 
@@ -521,7 +559,17 @@ def txt(u, c):
     msg = u.message.text; act = c.user_data.get('act')
     
     try:
-        if act == 'a_date':
+        # Handling the new Lock/Unlock flow
+        if act == 'lu_user':
+            usr = msg
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🔒 LOCK", callback_data=f"do_lock_{usr}"), InlineKeyboardButton("🔓 UNLOCK", callback_data=f"do_unlock_{usr}")],
+                [InlineKeyboardButton("🔙 BACK", callback_data='back')]
+            ])
+            u.message.reply_text(f"Select action for <b>{usr}</b>:", parse_mode=ParseMode.HTML, reply_markup=kb)
+            c.user_data['act'] = '' # clear state
+
+        elif act == 'a_date':
             c.user_data['d'] = msg; c.user_data['act'] = 'a_time'
             u.message.reply_text("⏰ <b>Enter Time:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             
@@ -534,16 +582,16 @@ def txt(u, c):
             open(DB_FILE, 'a').write(f"{usr}|{dt}|{tm}|Bot\n")
             
             resp = (
-                "============================\n"
+                f"<b>{TLINE}</b>\n"
                 "                      ACCOUNT \n"
-                "============================\n\n"
+                f"<b>{TLINE}</b>\n\n"
                 f"👤 Username : {usr}\n"
                 f"🔑 Password : {pwd}\n"
                 f"📅 Expiry   : {dt}\n"
                 f"⏰ Time     : {tm}\n\n"
-                "============================\n"
+                f"<b>{TLINE}</b>\n"
                 f"📋 Copy     : <code>{usr}:{pwd}</code>\n"
-                "============================"
+                f"<b>{TLINE}</b>"
             )
             u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
@@ -565,15 +613,6 @@ def txt(u, c):
             lines = [l for l in open(DB_FILE) if not l.startswith(f"{msg}|")]
             open(DB_FILE, 'w').writelines(lines)
             u.message.reply_text(f"🗑️ <b>DELETED:</b> <code>{msg}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
-
-        elif act == 'l1':
-            subprocess.run(f"usermod -L {msg}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(f"pkill -KILL -u {msg}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            u.message.reply_text(f"⛔ <b>LOCKED:</b> <code>{msg}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
-            
-        elif act == 'ul1':
-            subprocess.run(f"usermod -U {msg}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            u.message.reply_text(f"🔓 <b>UNLOCKED:</b> <code>{msg}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
             
     except: pass
 
@@ -603,8 +642,6 @@ EOF
     systemctl daemon-reload
     systemctl enable sshbot >/dev/null 2>&1
     systemctl restart sshbot
-    systemctl restart kp_monitor >/dev/null 2>&1
-    
     echo -e "${GREEN}✅ BOT INSTALLED SUCCESSFULLY!${NC}"; pause
 }
 
@@ -613,14 +650,14 @@ EOF
 # ==================================================
 while true; do
     draw_header
-    echo -e " ${GREEN}[1]${NC} 👤 ADD ACCOUNT"
-    echo -e " ${GREEN}[2]${NC} 🔄 RENEW ACCOUNT"
-    echo -e " ${GREEN}[3]${NC} 🗑️ REMOVE ACCOUNT"
-    echo -e " ${GREEN}[4]${NC} 🔐 LOCK ACCOUNT"
-    echo -e " ${GREEN}[5]${NC} 📋 LIST ACCOUNTS"
-    echo -e " ${GREEN}[6]${NC} ⚡ MONITOR USERS"
-    echo -e " ${GREEN}[7]${NC} 💾 BACKUP DATA"
-    echo -e " ${GREEN}[8]${NC} ⚙️ SETTINGS & MIGRATION"
+    echo -e " ${GREEN}[1]${NC} 👤 ADD USER"
+    echo -e " ${GREEN}[2]${NC} 🔄 RENEW"
+    echo -e " ${GREEN}[3]${NC} 🗑️ REMOVE"
+    echo -e " ${GREEN}[4]${NC} 🔒 LOCK / UNLOCK"
+    echo -e " ${GREEN}[5]${NC} 📋 ALL USERS"
+    echo -e " ${GREEN}[6]${NC} 🔘 MONITOR"
+    echo -e " ${GREEN}[7]${NC} 💾 SAVE DATA"
+    echo -e " ${GREEN}[8]${NC} ⚙️ SETTINGS"
     echo -e " ${GREEN}[9]${NC} 🔔 ALERTS LOG"
     echo -e " ${GREEN}[0]${NC} 🚪 EXIT"
     echo -e "${LINE}"
