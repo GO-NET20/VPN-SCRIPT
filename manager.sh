@@ -1,9 +1,10 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V114 (THE MASTERPIECE) 💎
-#  - CLI: ONLY DASHED LINES (--------------------)
-#  - BOT: ZERO LINES, 100% CLEAN TEXT
-#  - FIXED: USERDEL MAIL SPOOL ERRORS COMPLETELY MUTED
+#  SSH MANAGER V116 (THE FLAWLESS VIP) 💎
+#  - EXACT BOT CREATION MESSAGE AS REQUESTED
+#  - BOT: "BACK" BUTTON ONLY AFTER CREATION
+#  - CLI: NO ERRORS (Silent Delete)
+#  - FIXED: 3-SECOND MULTI-LOGIN MONITOR (Bulletproof)
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -37,23 +38,21 @@ MIGRATION_FILE="/root/migration_users.txt"
 MY_TOKEN="8134717950:AAGj2wWaABBUWbPLa7jX6yEWHgwjgUelpwg"
 MY_ID="7587310857"
 
-# --- 3. COLORS & EXACT REQUESTED LINE ---
+# --- 3. COLORS & CLI LINE ---
 RED='\033[1;31m'; GREEN='\033[1;32m'; YELLOW='\033[1;33m'
 PURPLE='\033[1;35m'; CYAN='\033[1;36m'; NC='\033[0m'; WHITE='\033[1;37m'
-# The EXACT line you requested:
 LINE="${PURPLE}----------------------------------------${NC}"
 
 mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  🛡️ PYTHON PRECISION MONITOR (BACKGROUND)
+#  🛡️ BULLETPROOF MULTI-LOGIN MONITOR
 # ==================================================
 if ! command -v python3 &> /dev/null; then
     $CMD python3 python3-pip > /dev/null 2>&1
 fi
 
-pkill -f kp_monitor.py
 cat > "$MONITOR_SCRIPT" << 'EOF'
 #!/usr/bin/env python3
 import datetime, subprocess, os, time
@@ -62,11 +61,18 @@ DB_FILE = "/etc/xpanel/users_db.txt"
 LOG_FILE = "/var/log/kp_manager.log"
 MAX_LOGIN = 1
 
+def log_event(msg):
+    try:
+        with open(LOG_FILE, "a") as f: f.write(f"{datetime.datetime.now()} - {msg}\n")
+    except: pass
+
 def check_loop():
     while True:
-        if os.path.exists(DB_FILE):
-            try:
-                lines = open(DB_FILE, 'r').readlines()
+        try:
+            if os.path.exists(DB_FILE):
+                with open(DB_FILE, 'r') as f:
+                    lines = f.readlines()
+                
                 new_lines = []
                 status_changed = False
                 now = datetime.datetime.now()
@@ -79,35 +85,65 @@ def check_loop():
                     if "V1" in user or "Turbo" in user or user == "root":
                         new_lines.append(line); continue
 
+                    # 1. EXPIRY CHECK
                     expired = False
                     if exp_date.lower() != "never":
                         try:
                             if not exp_time: exp_time = "23:59"
                             exp = datetime.datetime.strptime(f"{exp_date} {exp_time}", "%Y-%m-%d %H:%M")
                             if now >= exp:
-                                subprocess.run(f"pkill -KILL -u {user}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-                                # Removed -r to prevent mail spool errors completely
-                                subprocess.run(f"userdel -f {user}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                                subprocess.run(f"pkill -KILL -u {user}", shell=True, stderr=subprocess.DEVNULL)
+                                subprocess.run(f"userdel -f {user}", shell=True, stderr=subprocess.DEVNULL)
                                 status_changed = True; expired = True
                         except: pass
 
                     if expired: continue
 
+                    # 2. MULTI-LOGIN CHECK (FIXED ALGORITHM)
                     try:
-                        c = int(subprocess.getoutput(f"pgrep -u {user} | grep -E 'sshd|dropbear' | wc -l"))
-                        if c > MAX_LOGIN:
-                            subprocess.run(f"pkill -KILL -u {user}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                        # OpenSSH creates 2 processes per connection. Dropbear creates 1.
+                        ssh_procs = subprocess.getoutput(f"ps -u {user} -o comm= 2>/dev/null | grep -c sshd")
+                        drop_procs = subprocess.getoutput(f"ps -u {user} -o comm= 2>/dev/null | grep -c dropbear")
+                        
+                        c1 = int(ssh_procs) // 2 if ssh_procs.strip().isdigit() else 0
+                        c2 = int(drop_procs) if drop_procs.strip().isdigit() else 0
+                        
+                        if (c1 + c2) > MAX_LOGIN:
+                            subprocess.run(f"pkill -KILL -u {user}", shell=True, stderr=subprocess.DEVNULL)
                     except: pass
+                    
                     new_lines.append(line)
 
-                if status_changed: open(DB_FILE, 'w').writelines(new_lines)
-            except: pass
-        time.sleep(3)
+                if status_changed:
+                    with open(DB_FILE, 'w') as f:
+                        f.writelines(new_lines)
+        except Exception as e:
+            pass # Prevent any crash from stopping the loop
+            
+        time.sleep(3) # Wait exactly 3 seconds and repeat
 
-if __name__ == "__main__": check_loop()
+if __name__ == "__main__":
+    check_loop()
 EOF
 chmod +x "$MONITOR_SCRIPT"
-if ! pgrep -f "kp_monitor.py" > /dev/null; then nohup python3 "$MONITOR_SCRIPT" >/dev/null 2>&1 & fi
+
+# Register Monitor as a systemd service to NEVER die
+cat > /etc/systemd/system/kp_monitor.service << 'EOF'
+[Unit]
+Description=SSH Multi-Login & Expiry Monitor
+After=network.target
+
+[Service]
+ExecStart=/usr/bin/python3 /usr/local/bin/kp_monitor.py
+Restart=always
+RestartSec=3
+
+[Install]
+WantedBy=multi-user.target
+EOF
+systemctl daemon-reload
+systemctl enable kp_monitor >/dev/null 2>&1
+systemctl restart kp_monitor
 
 # ==================================================
 #  CLI FUNCTIONS (SERVER PANEL)
@@ -116,7 +152,7 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 draw_header() {
     clear
     echo -e "${LINE}"
-    echo -e "          ${WHITE}SSH MANAGER V114${NC}"
+    echo -e "          ${WHITE}SSH MANAGER V116${NC}"
     echo -e "${LINE}"
 }
 
@@ -141,9 +177,10 @@ fun_create() {
     [[ -z "$d" ]] && d="NEVER"
     [[ -z "$t" ]] && t="00:00"
     
+    # Silent user creation
     useradd -M -s /bin/false "$u" >/dev/null 2>&1
     echo "$u:$p" | chpasswd >/dev/null 2>&1
-    echo "$u|$d|$t|V114" >> "$USER_DB"
+    echo "$u|$d|$t|V116" >> "$USER_DB"
     
     clear
     echo -e "${LINE}"
@@ -187,7 +224,7 @@ fun_remove() {
     read -p " ⚠️ CONFIRM? [y/n]: " c
     if [[ "$c" == "y" ]]; then
         pkill -KILL -u "$u" >/dev/null 2>&1
-        # Removed -r to stop "mail spool not found" error permanently
+        # Removed -r to stop "mail spool not found" error permanently!
         userdel -f "$u" >/dev/null 2>&1
         sed -i "/^$u|/d" "$USER_DB"
         echo -e "${RED} 🗑️ DELETED SUCCESSFULLY${NC}"
@@ -235,7 +272,7 @@ fun_monitor_view() {
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
         if id "$u" &>/dev/null; then
-             if ps -ef | grep "sshd: $u" | grep -v grep > /dev/null 2>&1 || pgrep -u "$u" > /dev/null 2>&1; then
+             if ps -u "$u" -o comm= 2>/dev/null | grep -E 'sshd|dropbear' > /dev/null 2>&1; then
                 STATUS="🟢 ONLINE "
              else
                 STATUS="🔴 OFFLINE"
@@ -282,7 +319,7 @@ fun_settings() {
         draw_header
         echo -e "       ⚙️ ${WHITE}SETTINGS & MIGRATION${NC}"
         echo -e "${LINE}"
-        echo -e " [1] 🤖 Install/Fix Bot"
+        echo -e " [1] 🤖 Install/Fix Bot & Monitor"
         echo -e " [2] 🌍 Set Timezone (Tunis)"
         echo -e " [3] 📤 EXPORT Users (Backup)"
         echo -e " [4] 📥 RESTORE Users"
@@ -300,12 +337,12 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V114 - ZERO LINES IN TELEGRAM)
+#  🤖 BOT INSTALLER (V116 - EXACTLY AS REQUESTED)
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${YELLOW}INSTALLING BOT (REMOVING BOT LINES)...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT (APPLYING NEW UI & BACK BUTTON)...${NC}"
     
     pip3 uninstall -y python-telegram-bot telegram >/dev/null 2>&1
     
@@ -322,7 +359,7 @@ fun_install_bot() {
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
 
-    # PYTHON BOT SCRIPT (NO LINES AT ALL, PURE CLEAN TEXT)
+    # PYTHON BOT SCRIPT
     cat > /root/ssh_bot.py << 'EOF'
 import logging, os, subprocess
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
@@ -345,7 +382,8 @@ cfg = load_config(); TOKEN = cfg.get("BOT_TOKEN"); ADMIN_ID = int(cfg.get("ADMIN
 
 def get_status(u):
     try:
-        if subprocess.getoutput(f"pgrep -u {u}"): return "🟢 ONLINE"
+        if subprocess.run(f"ps -u {u} -o comm= 2>/dev/null | grep -E 'sshd|dropbear' > /dev/null", shell=True).returncode == 0:
+            return "🟢 ONLINE"
     except: pass
     return "🔴 OFFLINE"
 
@@ -358,12 +396,16 @@ def get_menu():
         [InlineKeyboardButton("🚀 MIGRATION", callback_data='migrate')]
     ])
 
+def get_back_btn():
+    # Only the back button for clean UI after actions
+    return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
+
 def start(u, c):
-    if u.effective_user.id == ADMIN_ID: u.message.reply_text("💎 <b>X-PANEL V114</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+    if u.effective_user.id == ADMIN_ID: u.message.reply_text("💎 <b>X-PANEL V116</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
 def btn(u, c):
     q = u.callback_query; q.answer(); d = q.data
-    if d == 'back': c.user_data.clear(); q.edit_message_text("💎 <b>X-PANEL V114</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
+    if d == 'back': c.user_data.clear(); q.edit_message_text("💎 <b>X-PANEL V116</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
 
     try:
         if d == 'add':
@@ -373,36 +415,36 @@ def btn(u, c):
                 if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0 and f"{usr}|" not in (open(DB_FILE).read() if os.path.exists(DB_FILE) else ""): break
                 i += 1
             c.user_data['u'] = usr; c.user_data['act'] = 'a_datetime'
-            q.edit_message_text(f"👤 Username: <code>{usr}</code>\n📅 <b>Enter Date and time (YYYY-MM-DD HH:MM):</b>", parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
+            q.edit_message_text(f"👤 Username: <code>{usr}</code>\n📅 <b>Enter Date and time (YYYY-MM-DD HH:MM):</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
-        elif d == 'ren': c.user_data['act']='r_datetime'; q.edit_message_text("🔄 <b>Username to Renew:</b>", parse_mode=ParseMode.HTML)
-        elif d == 'del': c.user_data['act']='d1'; q.edit_message_text("🗑️ <b>Username to Delete:</b>", parse_mode=ParseMode.HTML)
-        elif d == 'lock': c.user_data['act']='l1'; q.edit_message_text("🔒 <b>Username to Lock:</b>", parse_mode=ParseMode.HTML)
-        elif d == 'unlock': c.user_data['act']='ul1'; q.edit_message_text("🔓 <b>Username to Unlock:</b>", parse_mode=ParseMode.HTML)
+        elif d == 'ren': c.user_data['act']='r_datetime'; q.edit_message_text("🔄 <b>Username to Renew:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+        elif d == 'del': c.user_data['act']='d1'; q.edit_message_text("🗑️ <b>Username to Delete:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+        elif d == 'lock': c.user_data['act']='l1'; q.edit_message_text("🔒 <b>Username to Lock:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+        elif d == 'unlock': c.user_data['act']='ul1'; q.edit_message_text("🔓 <b>Username to Unlock:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
-        # BOT LIST: ZERO LINES
+        # BOT LIST: CLEAN TEXT
         elif d == 'list':
-            body = "📋 <b>LIST ACCOUNTS</b>\n\n"
+            body = "📋 <b>LIST ACCOUNTS</b>\n====================\n\n"
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
                     p = l.strip().split('|')
                     if len(p) < 3 or "V1" in p[0] or "root" in p[0]: continue
                     usr, date, time = p[0], p[1], p[2]
                     date_str = "NEVER" if date == "NEVER" else f"{date} {time}"
-                    body += f"👤 <code>{usr}</code>\n📅 {date_str}\n\n"
-            q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
+                    body += f"👤 <code>{usr}</code>\n📅 {date_str}\n--------------------\n"
+            q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
-        # BOT MONITOR: ZERO LINES
+        # BOT MONITOR: CLEAN TEXT
         elif d == 'onl':
-            body = "⚡ <b>LIVE MONITOR</b>\n\n"
+            body = "⚡ <b>LIVE MONITOR</b>\n====================\n\n"
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
                     usr = l.split('|')[0]
                     if not usr or "V1" in usr or "root" in usr: continue
                     if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0: continue
                     st = get_status(usr)
-                    body += f"👤 <code>{usr}</code>\n{st}\n\n"
-            q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
+                    body += f"👤 <code>{usr}</code>\n{st}\n--------------------\n"
+            q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif d == 'bak':
             if os.path.exists(DB_FILE): c.bot.send_document(ADMIN_ID, open(DB_FILE, 'rb'))
@@ -431,20 +473,24 @@ def txt(u, c):
             subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             open(DB_FILE, 'a').write(f"{usr}|{dt}|{tm}|Bot\n")
             
-            # BOT CREATE MSG: ZERO LINES
+            # EXACT FORMAT REQUESTED IN IMAGE 7 & 8 WITH ONLY BACK BUTTON
             resp = (
-                "✅ <b>ACCOUNT CREATED</b>\n\n"
-                f"👤 <b>Username :</b> <code>{usr}</code>\n"
-                f"🔑 <b>Password :</b> <code>{pwd}</code>\n"
-                f"📅 <b>Expiry   :</b> {dt}\n"
-                f"⏰ <b>Time     :</b> {tm}\n\n"
-                f"📋 <b>Copy     :</b> <code>{usr}:{pwd}</code>"
+                "============================\n"
+                "                      ACCOUNT \n"
+                "============================\n\n"
+                f"👤 Username : {usr}\n"
+                f"🔑 Password : {pwd}\n"
+                f"📅 Expiry   : {dt}\n"
+                f"⏰ Time     : {tm}\n\n"
+                "============================\n"
+                f"📋 Copy     : <code>{usr}:{pwd}</code>\n"
+                "============================"
             )
-            u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_menu())
+            u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif act == 'r_datetime':
             c.user_data['ru'] = msg; c.user_data['act'] = 'r_datetime_val'
-            u.message.reply_text("📅 <b>Enter New Date and time (YYYY-MM-DD HH:MM):</b>", parse_mode=ParseMode.HTML)
+            u.message.reply_text("📅 <b>Enter New Date and time (YYYY-MM-DD HH:MM):</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif act == 'r_datetime_val':
             usr = c.user_data.get('ru')
@@ -502,6 +548,8 @@ EOF
     systemctl daemon-reload
     systemctl enable sshbot >/dev/null 2>&1
     systemctl restart sshbot
+    systemctl restart kp_monitor >/dev/null 2>&1
+    
     echo -e "${GREEN}✅ BOT INSTALLED SUCCESSFULLY!${NC}"; pause
 }
 
@@ -517,7 +565,7 @@ while true; do
     echo -e " ${GREEN}[05]${NC} 📋 LIST ACCOUNTS"
     echo -e " ${GREEN}[06]${NC} 🔘 MONITOR USERS"
     echo -e " ${GREEN}[07]${NC} 💾 BACKUP DATA"
-    echo -e " ${GREEN}[08]${NC} ⚙️ SETTINGS"
+    echo -e " ${GREEN}[08]${NC} ⚙️ SETTINGS (BOT / MIGRATION)"
     echo -e " ${GREEN}[00]${NC} 🚪 EXIT"
     echo ""
     echo -e "${LINE}"
