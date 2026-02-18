@@ -1,15 +1,15 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V109 (ULTIMATE PERFECT ALIGNMENT) 💎
-#  - FIXED: CLI BOXES ARE NOW DYNAMICALLY FILLED & ALIGNED USING PRINTF
-#  - TELEGRAM BOT USES CLEAN HTML FORMATTING
-#  - ABSOLUTE SILENT ERRORS (No Linux warnings)
-#  - ALL 8 OPTIONS FULLY FUNCTIONAL
+#  SSH MANAGER V113 (ULTRA MINIMAL & FLAT) 💎
+#  - REMOVED ALL VERTICAL LINES & BOXES (FIXED MOBILE UI)
+#  - CLEAN OPEN-SPACE DESIGN (NEVER BREAKS)
+#  - ABSOLUTE SILENT ERRORS
+#  - 1-LINE DATE & TIME INPUT
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-# --- 1. SYSTEM SETUP & OS DETECTION ---
+# --- 1. SYSTEM SETUP ---
 timedatectl set-timezone Africa/Tunis 2>/dev/null
 
 if [ -f /etc/os-release ]; then
@@ -38,20 +38,17 @@ MIGRATION_FILE="/root/migration_users.txt"
 MY_TOKEN="8134717950:AAGj2wWaABBUWbPLa7jX6yEWHgwjgUelpwg"
 MY_ID="7587310857"
 
-# --- 3. COLORS & VISUAL CONSTANTS (WIDE BOXES) ---
+# --- 3. COLORS & SIMPLE LINES ---
 RED='\033[1;31m'; GREEN='\033[1;32m'; YELLOW='\033[1;33m'
 PURPLE='\033[1;35m'; CYAN='\033[1;36m'; NC='\033[0m'; WHITE='\033[1;37m'
-# Standardized wide boxes for CLI
-BOX_T="╔════════════════════════════════════════════════════╗"
-BOX_M="║"
-BOX_B="╚════════════════════════════════════════════════════╝"
-DIV_L="╟────────────────────────────────────────────────────╢"
+HLINE="${PURPLE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
+SLINE="${PURPLE}----------------------------------------${NC}"
 
 mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 
 # ==================================================
-#  🛡️ PYTHON PRECISION MONITOR (BACKGROUND)
+#  🛡️ PYTHON PRECISION MONITOR
 # ==================================================
 if ! command -v python3 &> /dev/null; then
     $CMD python3 python3-pip > /dev/null 2>&1
@@ -113,15 +110,14 @@ chmod +x "$MONITOR_SCRIPT"
 if ! pgrep -f "kp_monitor.py" > /dev/null; then nohup python3 "$MONITOR_SCRIPT" >/dev/null 2>&1 & fi
 
 # ==================================================
-#  CLI FUNCTIONS (PANEL - PERFECT ALIGNMENT)
+#  CLI FUNCTIONS (NO BOXES, NO VERTICAL LINES)
 # ==================================================
 pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 draw_header() {
     clear
-    echo -e "${PURPLE}${BOX_T}${NC}"
-    # Center text using printf padding based on box width
-    printf "${PURPLE}${BOX_M}${WHITE}%-52s${PURPLE}${BOX_M}${NC}\n" "           SSH MANAGER V109 (ULTIMATE)            "
-    echo -e "${PURPLE}${BOX_B}${NC}"
+    echo -e "${HLINE}"
+    echo -e "       💎 ${WHITE}SSH MANAGER V113${NC} 💎"
+    echo -e "${HLINE}"
 }
 
 fun_create() {
@@ -135,9 +131,9 @@ fun_create() {
     done
     p="12345"
     
-    echo -e "👤 USERNAME : ${WHITE}$u${NC}"
-    echo -e "🔑 PASSWORD : ${WHITE}$p${NC}"
-    read -p "📅 Enter Date and time (e.g., 2026-12-31 22:00) : " dt_input
+    echo -e " 👤 Username : ${WHITE}$u${NC}"
+    echo -e " 🔑 Password : ${WHITE}$p${NC}"
+    read -p " 📅 Expiry Date & Time: " dt_input
     
     d=$(echo "$dt_input" | awk '{print $1}')
     t=$(echo "$dt_input" | awk '{print $2}')
@@ -147,30 +143,31 @@ fun_create() {
     
     useradd -M -s /bin/false "$u" >/dev/null 2>&1
     echo "$u:$p" | chpasswd >/dev/null 2>&1
-    echo "$u|$d|$t|V109" >> "$USER_DB"
+    echo "$u|$d|$t|V113" >> "$USER_DB"
     
     clear
-    echo -e "${PURPLE}${BOX_T}${NC}"
-    printf "${PURPLE}${BOX_M}${WHITE}%-52s${PURPLE}${BOX_M}${NC}\n" "                 ♾  ACCOUNT CREATED ♾                "
-    echo -e "${PURPLE}${DIV_L}${NC}"
-    # Use printf to ensure the right border is always aligned by padding spaces
-    printf "${PURPLE}${BOX_M} ${NC}👤 Username   : ${WHITE}%-35s${PURPLE}${BOX_M}${NC}\n" "$u"
-    printf "${PURPLE}${BOX_M} ${NC}🔐 Password   : ${WHITE}%-35s${PURPLE}${BOX_M}${NC}\n" "$p"
-    printf "${PURPLE}${BOX_M} ${NC}📅 Expiry Date: ${WHITE}%-35s${PURPLE}${BOX_M}${NC}\n" "$d"
-    printf "${PURPLE}${BOX_M} ${NC}⏰ Expiry Time: ${WHITE}%-35s${PURPLE}${BOX_M}${NC}\n" "$t"
-    echo -e "${PURPLE}${BOX_T}${NC}"
-    printf "${PURPLE}${BOX_M} ${NC}📋 Copy: ${WHITE}%-41s${PURPLE}${BOX_M}${NC}\n" "$u:$p"
-    echo -e "${PURPLE}${BOX_B}${NC}"
+    echo -e "${HLINE}"
+    echo -e "      ✅ ${WHITE}ACCOUNT CREATED${NC}"
+    echo -e "${HLINE}"
+    echo -e ""
+    echo -e " 👤 Username  : ${WHITE}$u${NC}"
+    echo -e " 🔑 Password  : ${WHITE}$p${NC}"
+    echo -e " 📅 Expiry    : ${WHITE}$d${NC}"
+    echo -e " ⏰ Time      : ${WHITE}$t${NC}"
+    echo -e ""
+    echo -e "${SLINE}"
+    echo -e " 📋 Copy: ${WHITE}$u:$p${NC}"
+    echo -e "${SLINE}"
     pause
 }
 
 fun_renew() {
     draw_header
-    echo -e "${WHITE}RENEW USER${NC}"
-    echo -e "${PURPLE}${DIV_L}${NC}"
-    read -p "👤 USERNAME : " u
-    if ! grep -q "^$u|" "$USER_DB"; then echo -e "${RED}❌ NOT FOUND!${NC}"; pause; return; fi
-    read -p "📅 Enter Date and time : " dt_input
+    echo -e "           🔄 ${WHITE}RENEW USER${NC}"
+    echo -e "${SLINE}"
+    read -p " 👤 Username : " u
+    if ! grep -q "^$u|" "$USER_DB"; then echo -e "${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
+    read -p " 📅 New Date & Time : " dt_input
     d=$(echo "$dt_input" | awk '{print $1}')
     t=$(echo "$dt_input" | awk '{print $2}')
     [[ -z "$d" ]] && d="NEVER"
@@ -179,123 +176,127 @@ fun_renew() {
     sed -i "/^$u|/d" "$USER_DB"
     echo "$u|$d|$t|Renew" >> "$USER_DB"
     usermod -U "$u" >/dev/null 2>&1
-    echo -e "${GREEN}✅ RENEWED${NC}"; pause
+    echo -e "${GREEN} ✅ RENEWED SUCCESSFULLY${NC}"; pause
 }
 
 fun_remove() {
     draw_header
-    echo -e "${WHITE}REMOVE USER${NC}"
-    echo -e "${PURPLE}${DIV_L}${NC}"
-    read -p "👤 USERNAME : " u
-    read -p "⚠️ CONFIRM? [y/n]: " c
+    echo -e "           🗑️ ${WHITE}DELETE USER${NC}"
+    echo -e "${SLINE}"
+    read -p " 👤 Username : " u
+    read -p " ⚠️ CONFIRM? [y/n]: " c
     if [[ "$c" == "y" ]]; then
-        pkill -u "$u" >/dev/null 2>&1
+        pkill -KILL -u "$u" >/dev/null 2>&1
         userdel -f -r "$u" >/dev/null 2>&1
         sed -i "/^$u|/d" "$USER_DB"
-        echo -e "${RED}🗑️ DELETED${NC}"
+        echo -e "${RED} 🗑️ DELETED SUCCESSFULLY${NC}"
     fi
     pause
 }
 
 fun_lock() {
     draw_header
-    echo -e "${WHITE}LOCK/UNLOCK${NC}"
-    echo -e "${PURPLE}${DIV_L}${NC}"
-    read -p "👤 USERNAME : " u
+    echo -e "           🔒 ${WHITE}LOCK/UNLOCK${NC}"
+    echo -e "${SLINE}"
+    read -p " 👤 Username : " u
     echo " [1] LOCK ⛔"
     echo " [2] UNLOCK 🔓"
-    read -p " SELECT: " s
+    read -p " Select: " s
     if [[ "$s" == "1" ]]; then
-        usermod -L "$u" >/dev/null 2>&1; pkill -KILL -u "$u" >/dev/null 2>&1; echo -e "${GREEN}LOCKED${NC}"
+        usermod -L "$u" >/dev/null 2>&1; pkill -KILL -u "$u" >/dev/null 2>&1; echo -e "${GREEN} ⛔ LOCKED${NC}"
     else
-        usermod -U "$u" >/dev/null 2>&1; echo -e "${GREEN}UNLOCKED${NC}"
+        usermod -U "$u" >/dev/null 2>&1; echo -e "${GREEN} 🔓 UNLOCKED${NC}"
     fi
     pause
 }
 
 fun_list() {
     clear
-    echo -e "${PURPLE}${BOX_T}${NC}"
-    printf "${PURPLE}${BOX_M}${WHITE}%-52s${PURPLE}${BOX_M}${NC}\n" "                  LIST ACCOUNTS                     "
-    echo -e "${PURPLE}${DIV_L}${NC}"
+    echo -e "${HLINE}"
+    echo -e "          📋 ${WHITE}LIST ACCOUNTS${NC}"
+    echo -e "${HLINE}"
+    echo -e ""
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
         if id "$u" &>/dev/null; then
-             [[ "$d" == "NEVER" ]] && DATE_STR="NEVER" || DATE_STR="$d • $t"
-             # Precise column alignment using printf
-             printf "${PURPLE}${BOX_M} ${WHITE}%-15s ${PURPLE}│${WHITE} %-33s${PURPLE}${BOX_M}${NC}\n" "$u" "$DATE_STR"
+             [[ "$d" == "NEVER" ]] && DATE_STR="NEVER" || DATE_STR="$d $t"
+             # No vertical lines, just clean spacing
+             printf " 👤 ${WHITE}%-12s${NC}   📅 %s\n" "$u" "$DATE_STR"
         fi
     done < "$USER_DB"
-    echo -e "${PURPLE}${BOX_B}${NC}"
+    echo -e ""
+    echo -e "${SLINE}"
     pause
 }
 
 fun_monitor_view() {
     clear
-    echo -e "${PURPLE}${BOX_T}${NC}"
-    printf "${PURPLE}${BOX_M}${WHITE}%-52s${PURPLE}${BOX_M}${NC}\n" "                 🟢 LIVE MONITOR 🔴                 "
-    echo -e "${PURPLE}${DIV_L}${NC}"
+    echo -e "${HLINE}"
+    echo -e "          ⚡ ${WHITE}LIVE MONITOR${NC}"
+    echo -e "${HLINE}"
+    echo -e ""
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
         if id "$u" &>/dev/null; then
              if ps -ef | grep "sshd: $u" | grep -v grep > /dev/null 2>&1 || pgrep -u "$u" > /dev/null 2>&1; then
-                STATUS="🟢"
+                STATUS="🟢 ONLINE "
              else
-                STATUS="🔴"
+                STATUS="🔴 OFFLINE"
              fi
-             # Precise column alignment using printf
-             printf "${PURPLE}${BOX_M} ${WHITE}%-15s ${PURPLE}│${NC}           %s            ${PURPLE}${BOX_M}${NC}\n" "$u" "$STATUS"
+             # No vertical lines, clean spacing
+             printf " 👤 ${WHITE}%-12s${NC}   %s\n" "$u" "$STATUS"
         fi
     done < "$USER_DB"
-    echo -e "${PURPLE}${BOX_B}${NC}"
+    echo -e ""
+    echo -e "${SLINE}"
     pause
 }
 
 fun_backup() {
     draw_header
-    echo -e "${WHITE}LOCAL BACKUP${NC}"
-    echo -e "${PURPLE}${DIV_L}${NC}"
+    echo -e "          📦 ${WHITE}LOCAL BACKUP${NC}"
+    echo -e "${SLINE}"
     cp "$USER_DB" "$BACKUP_DIR/users_backup_$(date +%F).txt"
-    echo -e "${GREEN}✅ Backup Saved in $BACKUP_DIR${NC}"
+    echo -e "${GREEN} ✅ Backup Saved in $BACKUP_DIR${NC}"
     pause
 }
 
 fun_export_users() {
-    draw_header; echo -e "${YELLOW}EXPORTING USERS...${NC}"
+    draw_header; echo -e "${YELLOW} 📤 EXPORTING USERS...${NC}"
     cp "$USER_DB" "$MIGRATION_FILE"
-    echo -e "${GREEN}✅ EXPORT SUCCESSFUL!${NC}\nFile: $MIGRATION_FILE\nUse 'Restore' on the new server."; pause
+    echo -e "${GREEN} ✅ EXPORT SUCCESSFUL!${NC}\n File: $MIGRATION_FILE\n Upload this to new server."; pause
 }
 
 fun_import_users() {
-    draw_header; echo -e "${YELLOW}RESTORING USERS...${NC}"
-    if [[ ! -f "$MIGRATION_FILE" ]]; then echo -e "${RED}❌ FILE NOT FOUND ($MIGRATION_FILE)${NC}"; pause; return; fi
+    draw_header; echo -e "${YELLOW} 📥 RESTORING USERS...${NC}"
+    if [[ ! -f "$MIGRATION_FILE" ]]; then echo -e "${RED} ❌ FILE NOT FOUND ($MIGRATION_FILE)${NC}"; pause; return; fi
     count=0
     while IFS='|' read -r u d t tag; do
         [[ -z "$u" ]] && continue
         if ! id "$u" &>/dev/null; then
             useradd -M -s /bin/false "$u" >/dev/null 2>&1; echo "$u:12345" | chpasswd >/dev/null 2>&1
-            echo -e "Created: ${GREEN}$u${NC}"; ((count++))
+            echo -e " Created: ${GREEN}$u${NC}"; ((count++))
         fi
     done < "$MIGRATION_FILE"
     cat "$MIGRATION_FILE" > "$USER_DB"
-    echo -e "${GREEN}✅ RESTORED: $count USERS${NC}"; pause
+    echo -e "${GREEN} ✅ RESTORED: $count USERS${NC}"; pause
 }
 
 fun_settings() {
     while true; do
         draw_header
-        echo -e "${WHITE}SETTINGS & MIGRATION${NC}"
-        echo -e "${PURPLE}${DIV_L}${NC}"
-        echo -e " [1] 🤖 Install/Fix Bot (Libraries)"
-        echo -e " [2] 🌍 Set Timezone (Africa/Tunis)"
-        echo -e " [3] 📤 EXPORT USERS (Backup)"
-        echo -e " [4] 📥 RESTORE USERS (Restore)"
+        echo -e "       ⚙️ ${WHITE}SETTINGS & MIGRATION${NC}"
+        echo -e "${SLINE}"
+        echo -e " [1] 🤖 Install/Fix Bot"
+        echo -e " [2] 🌍 Set Timezone (Tunis)"
+        echo -e " [3] 📤 EXPORT Users (Backup)"
+        echo -e " [4] 📥 RESTORE Users"
         echo -e " [5] 🔙 Back"
-        echo -e "${PURPLE}${DIV_L}${NC}"
-        read -p " SELECT: " s
+        echo -e "${SLINE}"
+        read -p " Select: " s
         case "$s" in
             1) fun_install_bot ;;
-            2) timedatectl set-timezone Africa/Tunis; echo -e "${GREEN}✅ Timezone set to Tunis${NC}"; pause ;;
+            2) timedatectl set-timezone Africa/Tunis; echo -e "${GREEN} ✅ Timezone set${NC}"; pause ;;
             3) fun_export_users ;;
             4) fun_import_users ;;
             5) break ;;
@@ -304,12 +305,12 @@ fun_settings() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V109 - HTML CLEAN FORMAT)
+#  🤖 BOT INSTALLER (V113 - ZERO BORDERS HTML)
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${YELLOW}INSTALLING BOT (FIXING LIBRARIES)...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT (UPDATING UI)...${NC}"
     
     pip3 uninstall -y python-telegram-bot telegram >/dev/null 2>&1
     
@@ -326,7 +327,7 @@ fun_install_bot() {
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
     chmod 600 "$BOT_CONF"
 
-    # PYTHON BOT SCRIPT (USING HTML FOR CLEAN LOOK)
+    # PYTHON BOT SCRIPT (FLAT DESIGN, NO BRACKETS, NO VERTICAL LINES)
     cat > /root/ssh_bot.py << 'EOF'
 import logging, os, subprocess
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
@@ -337,8 +338,8 @@ CONF_FILE = "/etc/xpanel/bot.conf"
 DB_FILE = "/etc/xpanel/users_db.txt"
 MIGRATION_FILE = "/root/migration_users.txt"
 
-BOX_T = "╔══════════════════════════════════╗"
-BOX_B = "╚══════════════════════════════════╝"
+HLINE = "━━━━━━━━━━━━━━━━━━━━━"
+SLINE = "----------------------------------"
 
 def load_config():
     c = {}
@@ -352,9 +353,9 @@ cfg = load_config(); TOKEN = cfg.get("BOT_TOKEN"); ADMIN_ID = int(cfg.get("ADMIN
 
 def get_status(u):
     try:
-        if subprocess.getoutput(f"pgrep -u {u}"): return "🟢"
+        if subprocess.getoutput(f"pgrep -u {u}"): return "🟢 ONLINE"
     except: pass
-    return "🔴"
+    return "🔴 OFFLINE"
 
 def get_menu():
     return InlineKeyboardMarkup([
@@ -366,11 +367,11 @@ def get_menu():
     ])
 
 def start(u, c):
-    if u.effective_user.id == ADMIN_ID: u.message.reply_text("💎 <b>X-PANEL V109</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+    if u.effective_user.id == ADMIN_ID: u.message.reply_text("💎 <b>X-PANEL V113</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
 def btn(u, c):
     q = u.callback_query; q.answer(); d = q.data
-    if d == 'back': c.user_data.clear(); q.edit_message_text("💎 <b>X-PANEL V109</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
+    if d == 'back': c.user_data.clear(); q.edit_message_text("💎 <b>X-PANEL V113</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
 
     try:
         if d == 'add':
@@ -387,34 +388,30 @@ def btn(u, c):
         elif d == 'lock': c.user_data['act']='l1'; q.edit_message_text("🔒 <b>Username to Lock:</b>", parse_mode=ParseMode.HTML)
         elif d == 'unlock': c.user_data['act']='ul1'; q.edit_message_text("🔓 <b>Username to Unlock:</b>", parse_mode=ParseMode.HTML)
 
-        # EXACT VISUAL: LIST ACCOUNT (HTML avoids the big ugly gray background box)
         elif d == 'list':
-            body = f"<b>{BOX_T}</b>\n"
-            body += "<b>           LIST ACCOUNT           </b>\n"
-            body += f"<b>{BOX_B}</b>\n\n"
+            body = f"<b>{HLINE}</b>\n"
+            body += "📋 <b>LIST ACCOUNTS</b>\n"
+            body += f"<b>{HLINE}</b>\n\n"
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
                     p = l.strip().split('|')
                     if len(p) < 3 or "V1" in p[0] or "root" in p[0]: continue
                     usr, date, time = p[0], p[1], p[2]
-                    date_str = "NEVER" if date == "NEVER" else f"{date} • {time}"
-                    body += f"<code>{usr:<14} │ {date_str}</code>\n"
-            body += f"\n<b>{BOX_B}</b>"
+                    date_str = "NEVER" if date == "NEVER" else f"{date} {time}"
+                    body += f"👤 <code>{usr}</code>\n📅 {date_str}\n{SLINE}\n"
             q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
 
-        # EXACT VISUAL: MONITOR
         elif d == 'onl':
-            body = f"<b>{BOX_T}</b>\n"
-            body += "<b>          🟢 MONITOR 🔴           </b>\n"
-            body += f"<b>{BOX_B}</b>\n\n"
+            body = f"<b>{HLINE}</b>\n"
+            body += "⚡ <b>LIVE MONITOR</b>\n"
+            body += f"<b>{HLINE}</b>\n\n"
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
                     usr = l.split('|')[0]
                     if not usr or "V1" in usr or "root" in usr: continue
                     if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0: continue
                     st = get_status(usr)
-                    body += f"<code>{usr:<14} │ </code>     {st}\n"
-            body += f"\n<b>{BOX_B}</b>"
+                    body += f"👤 <code>{usr}</code>\n{st}\n{SLINE}\n"
             q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("🔙", callback_data='back')]]))
 
         elif d == 'bak':
@@ -444,18 +441,17 @@ def txt(u, c):
             subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             open(DB_FILE, 'a').write(f"{usr}|{dt}|{tm}|Bot\n")
             
-            # VIP ACCOUNT CREATION MESSAGE
             resp = (
-                f"<b>{BOX_T}</b>\n"
-                f"<b>           ♾  ACCOUNT  ♾          </b>\n"
-                f"<b>{BOX_B}</b>\n\n"
-                f"👤 Username   : <code>{usr}</code>\n"
-                f"🔐 Password   : <code>{pwd}</code>\n"
-                f"📅 Expiry Date: <code>{dt}</code>\n"
-                f"⏰ Expiry Time: <code>{tm}</code>\n\n"
-                f"<b>{BOX_T}</b>\n"
-                f"<b>             📋 <code>{usr}:{pwd}</code></b>\n"
-                f"<b>{BOX_B}</b>"
+                f"<b>{HLINE}</b>\n"
+                f"✅ <b>ACCOUNT CREATED</b>\n"
+                f"<b>{HLINE}</b>\n\n"
+                f"👤 <b>Username :</b> <code>{usr}</code>\n"
+                f"🔑 <b>Password :</b> <code>{pwd}</code>\n"
+                f"📅 <b>Expiry   :</b> {dt}\n"
+                f"⏰ <b>Time     :</b> {tm}\n\n"
+                f"<b>{SLINE}</b>\n"
+                f"📋 <b>Copy:</b> <code>{usr}:{pwd}</code>\n"
+                f"<b>{SLINE}</b>"
             )
             u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
@@ -476,7 +472,7 @@ def txt(u, c):
                 u.message.reply_text(f"✅ <b>RENEWED: {usr}</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
         elif act == 'd1':
-            subprocess.run(f"pkill -u {msg}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(f"pkill -KILL -u {msg}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(f"userdel -f -r {msg}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             lines = [l for l in open(DB_FILE) if not l.startswith(f"{msg}|")]
             open(DB_FILE, 'w').writelines(lines)
@@ -523,7 +519,7 @@ EOF
 }
 
 # ==================================================
-#  MAIN LOOP (THE 8 OPTIONS MENU)
+#  MAIN LOOP
 # ==================================================
 while true; do
     draw_header
@@ -537,8 +533,8 @@ while true; do
     echo -e " ${GREEN}[08]${NC} ⚙️ SETTINGS (BOT / MIGRATION)"
     echo -e " ${GREEN}[00]${NC} 🚪 EXIT"
     echo ""
-    echo -e "${PURPLE}${DIV_L}${NC}"
-        read -p " SELECT OPTION: " o
+    echo -e "${HLINE}"
+        read -p " Select Option: " o
     case "$o" in
         1|01) fun_create ;; 
         2|02) fun_renew ;; 
