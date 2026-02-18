@@ -387,9 +387,17 @@ while true; do
     echo -e " ${GREEN}[00]${NC} 🚪 EXIT"
     echo ""
     echo -e "${CYAN}==================================================${NC}"
-    read -p " SELECT OPTION: " o
+        read -p " SELECT OPTION: " o
     case "$o" in
-        1) fun_create ;; 2) fun_renew ;; 3) fun_remove ;; 4) fun_lock ;;
-        5) fun_list ;; 6) fun_list ;; 7) fun_backup ;; 8) fun_settings ;; 0) exit 0 ;;
+        1|01) fun_create ;; 
+        2|02) fun_renew ;; 
+        3|03) fun_remove ;; 
+        4|04) fun_lock ;;
+        5|05) fun_list ;; 
+        6|06) fun_list ;; 
+        7|07) fun_backup ;; 
+        8|08) fun_settings ;; 
+        0|00) exit 0 ;;
+        *) echo -e "${RED} Invalid Option!${NC}" ; sleep 1 ;;
     esac
-done
+    
