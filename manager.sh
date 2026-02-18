@@ -1,10 +1,9 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V99 (FULL SYNC EDITION) 💎
+#  SSH MANAGER V99 (FULL SYNC - FIXED) 💎
 #  - BOT & CLI ARE NOW 100% IDENTICAL
-#  - ADDED: Migration Button in Bot
-#  - ADDED: Full Date/Time in Bot List
-#  - FIXED: Library Conflicts & Python Logic
+#  - FIXED: Python Library Installation (Break System Packages)
+#  - FIXED: Monitor Option in Menu
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -236,6 +235,19 @@ fun_list() {
     echo ""; pause
 }
 
+fun_monitor_view() {
+    draw_header; echo -e "                ${WHITE}LIVE MONITOR${NC}"; echo -e "${CYAN}==================================================${NC}"
+    echo -e "Monitor is running in background (kp_monitor.py)."
+    echo -e "Checking log file: $LOG_FILE"
+    echo -e "------------------------------------------------"
+    if [ -f "$LOG_FILE" ]; then
+        tail -n 10 "$LOG_FILE"
+    else
+        echo "No logs yet."
+    fi
+    pause
+}
+
 fun_backup() {
     draw_header; echo -e "                ${WHITE}LOCAL BACKUP${NC}"; echo -e "${CYAN}==================================================${NC}"
     echo -e "${YELLOW}Creating Backup...${NC}"
@@ -272,7 +284,7 @@ fun_import_users() {
 fun_settings() {
     while true; do
         draw_header; echo -e "                ${WHITE}SETTINGS${NC}"; echo -e "${CYAN}==================================================${NC}"
-        echo -e " [1] Install/Update Bot"
+        echo -e " [1] Install/Update Bot (FIX LIBRARIES)"
         echo -e " [2] Set Timezone (Africa/Tunis)"
         echo -e " [3] 📤 EXPORT USERS (Backup)"
         echo -e " [4] 📥 RESTORE USERS (Restore)"
@@ -296,15 +308,26 @@ fun_settings() {
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${YELLOW}INSTALLING BOT V99...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT V99 (FIXING LIBS)...${NC}"
     
+    # 1. REMOVE OLD LIBS
+    echo -e "${BLUE}Cleaning old libraries...${NC}"
     pip3 uninstall -y python-telegram-bot telegram >/dev/null 2>&1
+    
+    # 2. INSTALL DEPENDENCIES (FORCE BREAK SYSTEM PACKAGES)
+    echo -e "${BLUE}Installing correct libraries (v13.7)...${NC}"
     if [[ "$OS" == "ubuntu" || "$OS" == "debian" ]]; then
         apt-get update -y >/dev/null 2>&1; apt-get install -y python3 python3-pip >/dev/null 2>&1
     else
         yum install -y python3 python3-pip >/dev/null 2>&1
     fi
-    pip3 install python-telegram-bot==13.7 schedule >/dev/null 2>&1
+    
+    # FORCE INSTALL v13.7 even on new systems
+    pip3 install python-telegram-bot==13.7 schedule requests --break-system-packages >/dev/null 2>&1
+    # Fallback if flag fails
+    if [ $? -ne 0 ]; then
+        pip3 install python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
+    fi
 
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$MY_ID\"" >> "$BOT_CONF"
@@ -510,7 +533,7 @@ while true; do
         3|03) fun_remove ;; 
         4|04) fun_lock ;;
         5|05) fun_list ;; 
-        6|06) fun_list ;; 
+        6|06) fun_monitor_view ;; 
         7|07) fun_backup ;; 
         8|08) fun_settings ;; 
         0|00) exit 0 ;;
