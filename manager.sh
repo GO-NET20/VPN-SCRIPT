@@ -400,4 +400,4 @@ while true; do
         0|00) exit 0 ;;
         *) echo -e "${RED} Invalid Option!${NC}" ; sleep 1 ;;
     esac
-    
+done
