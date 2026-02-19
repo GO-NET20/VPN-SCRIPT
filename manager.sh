@@ -153,7 +153,7 @@ pause() { echo -e "\n${BLUE}PRESS [ENTER] TO RETURN...${NC}"; read; }
 draw_header() {
     clear
     echo -e "${LINE}"
-    echo -e "           ⚡ ${BLUE}SSH MANAGER${NC} ⚡"
+    echo -e "               ⚡ ${BLUE}SSH MANAGER${NC} ⚡"
     echo -e "${LINE}"
 }
 
@@ -626,8 +626,9 @@ while true; do
     echo -e " ${BLUE}[9] ⚙️ SETTINGS${NC}"
     echo -e " ${BLUE}[0] 🚪 EXIT${NC}"
     echo -e "${LINE}"
-        read -p " $(echo -e ${BLUE}SELECT: ${NC})" o
+    echo -e " ${BLUE}SELECT:${NC}"
     echo -e "${LINE}"
+    read o
     case "$o" in
         1|01) fun_create ;; 
         2|02) fun_renew ;; 
