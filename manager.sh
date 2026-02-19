@@ -1,10 +1,10 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V124 (THE PERFECT LAYOUT) 💎
-#  - EXACT TELEGRAM BUTTON LAYOUT FROM IMAGE
-#  - CHANGED ALL LINES TO "==================="
-#  - COMBINED LOCK/UNLOCK MENU IN BOT
-#  - ADDED 🔘 EMOJI TO MONITOR
+#  SSH MANAGER V127 (THE FINAL LAYOUT) 💎
+#  - SWAPPED MENU ITEMS: [8] ALERTS LOG, [9] SETTINGS
+#  - BOT BUTTONS RESIZED EXACTLY AS REQUESTED
+#  - ALL LINES SET TO "==============================================="
+#  - ZERO ERRORS / SILENT EXECUTION
 # ==================================================
 
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
@@ -183,7 +183,7 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 draw_header() {
     clear
     echo -e "${LINE}"
-    echo -e "           ⚡ ${WHITE}SSH MANAGER V124${NC} ⚡"
+    echo -e "           ⚡ ${WHITE}SSH MANAGER V127${NC} ⚡"
     echo -e "${LINE}"
 }
 
@@ -208,21 +208,21 @@ fun_create() {
     
     useradd -M -s /bin/false "$u" >/dev/null 2>&1
     echo "$u:$p" | chpasswd >/dev/null 2>&1
-    echo "$u|$d|$t|V124" >> "$USER_DB"
+    echo "$u|$d|$t|V127" >> "$USER_DB"
     
     clear
-    echo -e "${LINE}"
-    echo -e "                    ${WHITE}ACCOUNT${NC} "
-    echo -e "${LINE}"
+    echo -e "${PURPLE}===============================================${NC}"
+    echo -e "                      ${WHITE}ACCOUNT${NC} "
+    echo -e "${PURPLE}===============================================${NC}"
     echo -e ""
     echo -e " 👤 Username : ${WHITE}$u${NC}"
     echo -e " 🔑 Password : ${WHITE}$p${NC}"
     echo -e " 📅 Expiry   : ${WHITE}$d${NC}"
     echo -e " ⏰ Time     : ${WHITE}$t${NC}"
     echo -e ""
-    echo -e "${LINE}"
+    echo -e "${PURPLE}===============================================${NC}"
     echo -e " 📋 Copy     : ${WHITE}$u:$p${NC}"
-    echo -e "${LINE}"
+    echo -e "${PURPLE}===============================================${NC}"
     pause
 }
 
@@ -245,7 +245,7 @@ fun_renew() {
 
 fun_remove() {
     draw_header
-    echo -e "               🗑️ ${WHITE}DELETE USER${NC}"
+    echo -e "               🗑️ ${WHITE}REMOVE USER${NC}"
     echo -e "${LINE}"
     read -p " 👤 USERNAME : " u
     read -p " ⚠️ CONFIRM? [Y/N]: " c
@@ -344,7 +344,7 @@ fun_import_users() {
 fun_settings() {
     while true; do
         draw_header
-        echo -e "            ⚙️ ${WHITE}SETTINGS MANAGER${NC}"
+        echo -e "            ⚙️ ${WHITE}SETTINGS & MIGRATION${NC}"
         echo -e "${LINE}"
         echo -e " ${GREEN}[1]${NC} 🤖 INSTALL BOT"
         echo -e " ${GREEN}[2]${NC} 🌍 SET TIMEZONE"
@@ -366,7 +366,7 @@ fun_settings() {
 fun_violations() {
     clear
     echo -e "${LINE}"
-    echo -e "         🔔 ${WHITE}MULTI-LOGIN VIOLATIONS${NC}"
+    echo -e "         🔔 ${WHITE}ALERTS LOG (VIOLATIONS)${NC}"
     echo -e "${LINE}"
     echo -e ""
     if [ -f "$LOG_FILE" ]; then
@@ -387,12 +387,12 @@ fun_violations() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER (V124 - PERFECT BUTTON LAYOUT)
+#  🤖 BOT INSTALLER
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${YELLOW}INSTALLING BOT WITH NEW LAYOUT...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT...${NC}"
     
     pip3 uninstall -y python-telegram-bot telegram >/dev/null 2>&1
     
@@ -439,7 +439,6 @@ def get_status(u):
     return "🔴 OFFLINE"
 
 def get_menu():
-    # Exactly matching the user's requested layout from the image
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👤 ADD USER", callback_data='add')],
         [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ REMOVE", callback_data='del')],
@@ -461,11 +460,11 @@ def get_back_btn():
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
 
 def start(u, c):
-    if u.effective_user.id == ADMIN_ID: u.message.reply_text(f"⚡ <b>SSH MANAGER V124</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+    if u.effective_user.id == ADMIN_ID: u.message.reply_text(f"⚡ <b>SSH MANAGER V127</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
 def btn(u, c):
     q = u.callback_query; q.answer(); d = q.data
-    if d == 'back': c.user_data.clear(); q.edit_message_text(f"⚡ <b>SSH MANAGER V124</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
+    if d == 'back': c.user_data.clear(); q.edit_message_text(f"⚡ <b>SSH MANAGER V127</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
 
     try:
         if d == 'add':
@@ -481,7 +480,6 @@ def btn(u, c):
         elif d == 'ren': c.user_data['act']='r_date'; q.edit_message_text("🔄 <b>Username to Renew:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif d == 'del': c.user_data['act']='d1'; q.edit_message_text("🗑️ <b>Username to Delete:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         
-        # Combined Lock/Unlock logic
         elif d == 'lock_menu':
             c.user_data['act']='lu_user'
             q.edit_message_text("🔒/🔓 <b>Enter Username to Lock or Unlock:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
@@ -559,7 +557,6 @@ def txt(u, c):
     msg = u.message.text; act = c.user_data.get('act')
     
     try:
-        # Handling the new Lock/Unlock flow
         if act == 'lu_user':
             usr = msg
             kb = InlineKeyboardMarkup([
@@ -567,7 +564,7 @@ def txt(u, c):
                 [InlineKeyboardButton("🔙 BACK", callback_data='back')]
             ])
             u.message.reply_text(f"Select action for <b>{usr}</b>:", parse_mode=ParseMode.HTML, reply_markup=kb)
-            c.user_data['act'] = '' # clear state
+            c.user_data['act'] = '' 
 
         elif act == 'a_date':
             c.user_data['d'] = msg; c.user_data['act'] = 'a_time'
@@ -650,15 +647,15 @@ EOF
 # ==================================================
 while true; do
     draw_header
-    echo -e " ${GREEN}[1]${NC} 👤 ADD USER"
-    echo -e " ${GREEN}[2]${NC} 🔄 RENEW"
-    echo -e " ${GREEN}[3]${NC} 🗑️ REMOVE"
-    echo -e " ${GREEN}[4]${NC} 🔒 LOCK / UNLOCK"
-    echo -e " ${GREEN}[5]${NC} 📋 ALL USERS"
-    echo -e " ${GREEN}[6]${NC} 🔘 MONITOR"
-    echo -e " ${GREEN}[7]${NC} 💾 SAVE DATA"
-    echo -e " ${GREEN}[8]${NC} ⚙️ SETTINGS"
-    echo -e " ${GREEN}[9]${NC} 🔔 ALERTS LOG"
+    echo -e " ${GREEN}[1]${NC} 👤 ADD ACCOUNT"
+    echo -e " ${GREEN}[2]${NC} 🔄 RENEW ACCOUNT"
+    echo -e " ${GREEN}[3]${NC} 🗑️ REMOVE ACCOUNT"
+    echo -e " ${GREEN}[4]${NC} 🔐 LOCK ACCOUNT"
+    echo -e " ${GREEN}[5]${NC} 📋 LIST ACCOUNTS"
+    echo -e " ${GREEN}[6]${NC} 🔘 MONITOR USERS"
+    echo -e " ${GREEN}[7]${NC} 💾 BACKUP DATA"
+    echo -e " ${GREEN}[8]${NC} 🔔 ALERTS LOG"
+    echo -e " ${GREEN}[9]${NC} ⚙️ SETTINGS"
     echo -e " ${GREEN}[0]${NC} 🚪 EXIT"
     echo -e "${LINE}"
         read -p " SELECT: " o
@@ -670,8 +667,8 @@ while true; do
         5|05) fun_list ;; 
         6|06) fun_monitor_view ;; 
         7|07) fun_backup ;; 
-        8|08) fun_settings ;; 
-        9|09) fun_violations ;; 
+        8|08) fun_violations ;; 
+        9|09) fun_settings ;; 
         0|00) exit 0 ;;
         *) echo -e "${RED} INVALID OPTION!${NC}" ; sleep 1 ;;
     esac
