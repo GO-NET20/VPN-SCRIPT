@@ -97,27 +97,33 @@ def check_loop():
                     user, exp_date, exp_time = parts[0], parts[1], parts[2]
                     if "V1" in user or "Turbo" in user or user == "root":
                         new_lines.append(line); continue
+                    
                     expired = False
                     if exp_date.lower() != "never":
                         try:
                             exp = datetime.datetime.strptime(f"{exp_date} {exp_time}", "%Y-%m-%d %H:%M")
                             if now >= exp:
-                                subprocess.run(f"pkill -KILL -u {user}", shell=True, stderr=subprocess.DEVNULL)
-                                subprocess.run(f"userdel -f {user}", shell=True, stderr=subprocess.DEVNULL)
+                                os.system(f"killall -9 -u {user} 2>/dev/null")
+                                os.system(f"pkill -KILL -u {user} 2>/dev/null")
+                                os.system(f"userdel -f {user} 2>/dev/null")
                                 status_changed = True; expired = True
                                 log_event(f"ACCOUNT EXPIRED: {user} deleted.")
                                 send_alert(f"🗑️ <b>ACCOUNT EXPIRED</b>\n\n👤 User: <code>{user}</code>\n🛑 Account automatically deleted.", f"{user}_exp")
                         except: pass
                     if expired: continue
+
                     try:
                         ssh_procs = subprocess.getoutput(f"ps -u {user} -o comm= 2>/dev/null | grep -cE 'sshd|dropbear'")
                         total = int(ssh_procs) if ssh_procs.strip().isdigit() else 0
+                        
                         if total > MAX_LOGIN:
-                            subprocess.run(f"pkill -KILL -u {user}", shell=True, stderr=subprocess.DEVNULL)
+                            os.system(f"killall -9 -u {user} 2>/dev/null")
+                            os.system(f"pkill -KILL -u {user} 2>/dev/null")
                             log_event(f"MULTI-LOGIN KICK: {user} used {total} connections.")
                             send_alert(f"⚠️ <b>MULTI-LOGIN DETECTED</b>\n\n👤 User: <code>{user}</code>\n💻 Devices: {total}\n🛑 User has been kicked out.", f"{user}_multi")
                     except: pass
                     new_lines.append(line)
+                
                 if status_changed:
                     with open(DB_FILE, 'w') as f:
                         f.writelines(new_lines)
@@ -166,7 +172,6 @@ fun_create() {
     echo -e " ${BLUE}👤 USERNAME :${NC} ${WHITE}$u${NC}"
     echo -e " ${BLUE}🔑 PASSWORD :${NC} ${WHITE}$p${NC}"
     
-    # ميزة تحديد ما إذا كان الحساب بمدة أو مفتوح Y/N
     read -p " $(echo -e ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC})" exp_choice
     
     if [[ "${exp_choice,,}" == "y" ]]; then
@@ -260,7 +265,6 @@ fun_list() {
     echo -e "${LINE}"
     echo -e "               📋 ${BLUE}ALL USERS${NC}"
     echo -e "${LINE}"
-    # Hyper-speed Optimization for 10,000+ users
     SHADOW_CACHE=$(cat /etc/shadow 2>/dev/null)
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
@@ -279,7 +283,6 @@ fun_monitor_view() {
     echo -e "${LINE}"
     echo -e "               🔘 ${BLUE}LIVE MONITOR${NC}"
     echo -e "${LINE}"
-    # Hyper-speed Optimization for 10,000+ users
     ACTIVE_PROCS=$(ps -eo user,comm 2>/dev/null | grep -E 'sshd|dropbear')
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
@@ -374,7 +377,7 @@ fun_violations() {
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${BLUE}INSTALLING BOT WITH CHUNKING & Y/N FEATURE...${NC}"
+    clear; echo -e "${BLUE}INSTALLING BOT WITH PERFECT BUTTON SIZES...${NC}"
     pip3 install python-telegram-bot==13.7 schedule requests --break-system-packages >/dev/null 2>&1 || \
     pip3 install python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
@@ -385,6 +388,7 @@ fun_install_bot() {
 import logging, os, subprocess, re
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
+
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(message)s')
 CONF_FILE = "/etc/xpanel/bot.conf"
 DB_FILE = "/etc/xpanel/users_db.txt"
@@ -397,14 +401,17 @@ def load_config():
             if "=" in l: k, v = l.strip().split("=", 1); c[k] = v.strip().replace('"', '')
     except: pass
     return c
+
 cfg = load_config(); TOKEN = cfg.get("BOT_TOKEN"); ADMIN_ID = int(cfg.get("ADMIN_ID", 0))
 
 def get_menu():
+    # PERFECT SYMMETRICAL LAYOUT - NO CUT TEXT
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👤 ADD USER", callback_data='add')],
         [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ REMOVE", callback_data='del')],
         [InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock_menu')],
-        [InlineKeyboardButton("📋 ALL USERS", callback_data='list'), InlineKeyboardButton("🔘 MONITOR", callback_data='onl')],
+        [InlineKeyboardButton("📋 ALL USERS", callback_data='list')],
+        [InlineKeyboardButton("🔘 MONITOR", callback_data='onl')],
         [InlineKeyboardButton("💾 SAVE DATA", callback_data='bak')],
         [InlineKeyboardButton("⚙️ SETTINGS", callback_data='bot_set')]
     ])
@@ -445,7 +452,7 @@ def btn(u, c):
             usr = c.user_data['u']; pwd = "12345"; dt = "NEVER"; tm = "00:00"
             subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL); subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL)
             open(DB_FILE, 'a').write(f"{usr}|{dt}|{tm}|SSH\n")
-            resp = (f"<b>{TLINE}</b>\n          ACCOUNT \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{dt}</code>\n⏰ Time     : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
+            resp = (f"<b>{TLINE}</b>\n          <b>ACCOUNT</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{dt}</code>\n⏰ Time     : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
             q.edit_message_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif d == 'ren': 
@@ -469,14 +476,14 @@ def btn(u, c):
             q.edit_message_text("🔒/🔓 <b>Enter Username to Lock or Unlock:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif d.startswith('do_lock_'):
             usr = d.split('_', 2)[2]
-            subprocess.run(f"usermod -L {usr}", shell=True, stdout=subprocess.DEVNULL); subprocess.run(f"pkill -KILL -u {usr}", shell=True, stdout=subprocess.DEVNULL)
+            subprocess.run(f"usermod -L {usr}", shell=True, stdout=subprocess.DEVNULL)
+            os.system(f"killall -9 -u {usr} 2>/dev/null; pkill -KILL -u {usr} 2>/dev/null")
             q.edit_message_text(f"⛔ <b>LOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
         elif d.startswith('do_unlock_'):
             usr = d.split('_', 2)[2]
             subprocess.run(f"usermod -U {usr}", shell=True, stdout=subprocess.DEVNULL)
             q.edit_message_text(f"🔓 <b>UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
-        # CHUNKING LOGIC FOR UNLIMITED USERS
         elif d == 'list':
             msgs = []
             body = f"<b>{TLINE}</b>\n📋 <b>ALL USERS</b>\n<b>{TLINE}</b>\n\n"
@@ -506,13 +513,15 @@ def btn(u, c):
             msgs = []
             body = f"<b>{TLINE}</b>\n🔘 <b>LIVE MONITOR</b>\n<b>{TLINE}</b>\n\n"
             if os.path.exists(DB_FILE):
-                try: active_procs = subprocess.getoutput("ps -eo user,comm | grep -E 'sshd|dropbear'")
-                except: active_procs = ""
+                try:
+                    active_users_raw = subprocess.getoutput("ps -eo user,comm | grep -E 'sshd|dropbear' | awk '{print $1}'").split()
+                    active_set = set(active_users_raw)
+                except: active_set = set()
+                
                 for l in open(DB_FILE):
                     usr = l.split('|')[0]
                     if not usr or "root" in usr: continue
-                    if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL).returncode != 0: continue
-                    st = "🟢 ONLINE" if f"{usr} " in active_procs else "🔴 OFFLINE"
+                    st = "🟢 ONLINE" if usr in active_set else "🔴 OFFLINE"
                     line = f"👤 <code>{usr}</code>\n{st}\n\n"
                     if len(body) + len(line) > 3800:
                         msgs.append(body)
@@ -570,7 +579,7 @@ def txt(u, c):
             d = dm.group(0) if dm else "NEVER"; t = tm.group(0) if tm else "00:00"
             subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL); subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL)
             open(DB_FILE, 'a').write(f"{usr}|{d}|{t}|SSH\n")
-            resp = (f"<b>{TLINE}</b>\n          ACCOUNT \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{d}</code>\n⏰ Time     : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
+            resp = (f"<b>{TLINE}</b>\n          <b>ACCOUNT</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{d}</code>\n⏰ Time     : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
             u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             
         elif act == 'r_val':
@@ -582,7 +591,8 @@ def txt(u, c):
             u.message.reply_text(f"✅ <b>RENEWED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
             
         elif act == 'd1':
-            subprocess.run(f"pkill -KILL -u {msg}", shell=True); subprocess.run(f"userdel -f {msg}", shell=True)
+            os.system(f"killall -9 -u {msg} 2>/dev/null; pkill -KILL -u {msg} 2>/dev/null")
+            subprocess.run(f"userdel -f {msg}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             lines = [l for l in open(DB_FILE) if not l.startswith(f"{msg}|")]
             open(DB_FILE, 'w').writelines(lines)
             u.message.reply_text(f"🗑️ <b>DELETED:</b> <code>{msg}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
