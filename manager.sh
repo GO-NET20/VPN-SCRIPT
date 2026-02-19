@@ -1,9 +1,9 @@
 #!/bin/bash
 # ==================================================
-#  SSH MANAGER V127 (THE FINAL LAYOUT) 💎
-#  - SWAPPED MENU ITEMS: [8] ALERTS LOG, [9] SETTINGS
-#  - BOT BUTTONS RESIZED EXACTLY AS REQUESTED
-#  - ALL LINES SET TO "==============================================="
+#  SSH MANAGER V130 (THE CLICK-TO-COPY VIP) 💎
+#  - MADE USERNAME, PASSWORD, AND DATES CLICK-TO-COPY IN TELEGRAM
+#  - BOT: 1-STEP DATE & TIME INPUT (Smart Parsing)
+#  - RETAINED PERFECT BUTTON LAYOUT
 #  - ZERO ERRORS / SILENT EXECUTION
 # ==================================================
 
@@ -183,7 +183,7 @@ pause() { echo -e "\n${CYAN}PRESS [ENTER] TO RETURN...${NC}"; read; }
 draw_header() {
     clear
     echo -e "${LINE}"
-    echo -e "           ⚡ ${WHITE}SSH MANAGER V127${NC} ⚡"
+    echo -e "           ⚡ ${WHITE}SSH MANAGER V130${NC} ⚡"
     echo -e "${LINE}"
 }
 
@@ -201,14 +201,18 @@ fun_create() {
     echo -e " 👤 USERNAME : ${WHITE}$u${NC}"
     echo -e " 🔑 PASSWORD : ${WHITE}$p${NC}"
     
-    read -p " 📅 ENTER DATE : " d
+    read -p " 📅 Enter Date and Time : " dt_input
+    
+    clean_input=$(echo "$dt_input" | sed 's/ - / /g')
+    d=$(echo "$clean_input" | awk '{print $1}')
+    t=$(echo "$clean_input" | awk '{print $2}')
+    
     [[ -z "$d" ]] && d="NEVER"
-    read -p " ⏰ ENTER TIME : " t
     [[ -z "$t" ]] && t="00:00"
     
     useradd -M -s /bin/false "$u" >/dev/null 2>&1
     echo "$u:$p" | chpasswd >/dev/null 2>&1
-    echo "$u|$d|$t|V127" >> "$USER_DB"
+    echo "$u|$d|$t|V130" >> "$USER_DB"
     
     clear
     echo -e "${PURPLE}===============================================${NC}"
@@ -232,9 +236,13 @@ fun_renew() {
     echo -e "${LINE}"
     read -p " 👤 USERNAME : " u
     if ! grep -q "^$u|" "$USER_DB"; then echo -e "${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
-    read -p " 📅 ENTER DATE : " d
+    
+    read -p " 📅 Enter New Date and Time : " dt_input
+    clean_input=$(echo "$dt_input" | sed 's/ - / /g')
+    d=$(echo "$clean_input" | awk '{print $1}')
+    t=$(echo "$clean_input" | awk '{print $2}')
+    
     [[ -z "$d" ]] && d="NEVER"
-    read -p " ⏰ ENTER TIME : " t
     [[ -z "$t" ]] && t="23:59"
     
     sed -i "/^$u|/d" "$USER_DB"
@@ -346,7 +354,7 @@ fun_settings() {
         draw_header
         echo -e "            ⚙️ ${WHITE}SETTINGS & MIGRATION${NC}"
         echo -e "${LINE}"
-        echo -e " ${GREEN}[1]${NC} 🤖 INSTALL BOT"
+        echo -e " ${GREEN}[1]${NC} 🛠️ INSTALL BOT"
         echo -e " ${GREEN}[2]${NC} 🌍 SET TIMEZONE"
         echo -e " ${GREEN}[3]${NC} 📤 EXPORT USERS"
         echo -e " ${GREEN}[4]${NC} 📥 RESTORE USERS"
@@ -387,12 +395,12 @@ fun_violations() {
 }
 
 # ==================================================
-#  🤖 BOT INSTALLER
+#  🤖 BOT INSTALLER 
 # ==================================================
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${YELLOW}INSTALLING BOT...${NC}"
+    clear; echo -e "${YELLOW}INSTALLING BOT WITH COPY-FRIENDLY TEXT...${NC}"
     
     pip3 uninstall -y python-telegram-bot telegram >/dev/null 2>&1
     
@@ -419,7 +427,9 @@ logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(messa
 CONF_FILE = "/etc/xpanel/bot.conf"
 DB_FILE = "/etc/xpanel/users_db.txt"
 MIGRATION_FILE = "/root/migration_users.txt"
-TLINE = "==============================================="
+
+# Shortened lines so they don't break/wrap on mobile screens!
+TLINE = "============================"
 
 def load_config():
     c = {}
@@ -460,11 +470,11 @@ def get_back_btn():
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
 
 def start(u, c):
-    if u.effective_user.id == ADMIN_ID: u.message.reply_text(f"⚡ <b>SSH MANAGER V127</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+    if u.effective_user.id == ADMIN_ID: u.message.reply_text(f"⚡ <b>SSH MANAGER V130</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
 def btn(u, c):
     q = u.callback_query; q.answer(); d = q.data
-    if d == 'back': c.user_data.clear(); q.edit_message_text(f"⚡ <b>SSH MANAGER V127</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
+    if d == 'back': c.user_data.clear(); q.edit_message_text(f"⚡ <b>SSH MANAGER V130</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
 
     try:
         if d == 'add':
@@ -473,11 +483,12 @@ def btn(u, c):
                 usr = f"USER{i}"
                 if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0 and f"{usr}|" not in (open(DB_FILE).read() if os.path.exists(DB_FILE) else ""): break
                 i += 1
-            c.user_data['u'] = usr; c.user_data['act'] = 'a_date'
-            msg = f"👤 Username : <code>{usr}</code>\n🔑 Password  : 12345\n\n📅 <b>Enter Date:</b>"
+            c.user_data['u'] = usr; c.user_data['act'] = 'a_datetime'
+            # Click to copy in Telegram is triggered by <code> tags
+            msg = f"👤 Username : <code>{usr}</code>\n🔑 Password  : <code>12345</code>\n\n📅 <b>Enter Date and Time :</b>"
             q.edit_message_text(msg, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
-        elif d == 'ren': c.user_data['act']='r_date'; q.edit_message_text("🔄 <b>Username to Renew:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+        elif d == 'ren': c.user_data['act']='r_datetime'; q.edit_message_text("🔄 <b>Username to Renew:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif d == 'del': c.user_data['act']='d1'; q.edit_message_text("🗑️ <b>Username to Delete:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         
         elif d == 'lock_menu':
@@ -510,7 +521,7 @@ def btn(u, c):
                             lock_icon = " ⛔"
                     except: pass
                     
-                    body += f"👤 <code>{usr}</code>{lock_icon}\n📅 {date_str}\n\n"
+                    body += f"👤 <code>{usr}</code>{lock_icon}\n📅 <code>{date_str}</code>\n\n"
             q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif d == 'onl':
@@ -566,43 +577,49 @@ def txt(u, c):
             u.message.reply_text(f"Select action for <b>{usr}</b>:", parse_mode=ParseMode.HTML, reply_markup=kb)
             c.user_data['act'] = '' 
 
-        elif act == 'a_date':
-            c.user_data['d'] = msg; c.user_data['act'] = 'a_time'
-            u.message.reply_text("⏰ <b>Enter Time:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
-            
-        elif act == 'a_time':
+        elif act == 'a_datetime':
             usr = c.user_data['u']; pwd = "12345"
-            dt = c.user_data['d']; tm = msg
+            
+            clean_msg = msg.replace(" - ", " ")
+            parts = clean_msg.split()
+            dt = parts[0] if len(parts) > 0 else "NEVER"
+            tm = parts[1] if len(parts) > 1 else "00:00"
             
             subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             open(DB_FILE, 'a').write(f"{usr}|{dt}|{tm}|Bot\n")
             
+            # EVERYTHING INSIDE <code> TAGS SO IT COPIES ON 1 TAP
             resp = (
                 f"<b>{TLINE}</b>\n"
                 "                      ACCOUNT \n"
                 f"<b>{TLINE}</b>\n\n"
-                f"👤 Username : {usr}\n"
-                f"🔑 Password : {pwd}\n"
-                f"📅 Expiry   : {dt}\n"
-                f"⏰ Time     : {tm}\n\n"
+                f"👤 Username : <code>{usr}</code>\n"
+                f"🔑 Password : <code>{pwd}</code>\n"
+                f"📅 Expiry   : <code>{dt}</code>\n"
+                f"⏰ Time     : <code>{tm}</code>\n\n"
                 f"<b>{TLINE}</b>\n"
                 f"📋 Copy     : <code>{usr}:{pwd}</code>\n"
                 f"<b>{TLINE}</b>"
             )
             u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
-        elif act == 'r_date':
-            c.user_data['ru'] = msg; c.user_data['act'] = 'r_time'
-            u.message.reply_text("📅 <b>Enter New Date:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+        elif act == 'r_datetime':
+            c.user_data['ru'] = msg; c.user_data['act'] = 'r_datetime_val'
+            u.message.reply_text("📅 <b>Enter New Date and Time :</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             
-        elif act == 'r_time':
-            usr = c.user_data.get('ru'); dt = c.user_data.get('rd', 'NEVER'); tm = msg
+        elif act == 'r_datetime_val':
+            usr = c.user_data.get('ru')
+            clean_msg = msg.replace(" - ", " ")
+            parts = clean_msg.split()
+            dt = parts[0] if len(parts) > 0 else "NEVER"
+            tm = parts[1] if len(parts) > 1 else "23:59"
+            
             if os.path.exists(DB_FILE):
                 lines = [l for l in open(DB_FILE) if not l.startswith(f"{usr}|")]
                 lines.append(f"{usr}|{dt}|{tm}|Renew\n")
                 open(DB_FILE, 'w').writelines(lines)
-                u.message.reply_text(f"✅ <b>RENEWED: {usr}</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+                u.message.reply_text(f"✅ <b>RENEWED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
         elif act == 'd1':
             subprocess.run(f"pkill -KILL -u {msg}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
