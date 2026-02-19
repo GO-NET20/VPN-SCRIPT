@@ -100,7 +100,6 @@ def check_loop():
                     expired = False
                     if exp_date.lower() != "never":
                         try:
-                            if not exp_time: exp_time = "23:59"
                             exp = datetime.datetime.strptime(f"{exp_date} {exp_time}", "%Y-%m-%d %H:%M")
                             if now >= exp:
                                 subprocess.run(f"pkill -KILL -u {user}", shell=True, stderr=subprocess.DEVNULL)
@@ -111,14 +110,12 @@ def check_loop():
                         except: pass
                     if expired: continue
                     try:
-                        ssh_procs = subprocess.getoutput(f"ps -u {user} -o comm= 2>/dev/null | grep -c sshd")
-                        drop_procs = subprocess.getoutput(f"ps -u {user} -o comm= 2>/dev/null | grep -c dropbear")
-                        c1 = int(ssh_procs) // 2 if ssh_procs.strip().isdigit() else 0
-                        c2 = int(drop_procs) if drop_procs.strip().isdigit() else 0
-                        total = c1 + c2
+                        ssh_procs = subprocess.getoutput(f"ps -u {user} -o comm= 2>/dev/null | grep -cE 'sshd|dropbear'")
+                        total = int(ssh_procs) if ssh_procs.strip().isdigit() else 0
+                        # Fixed Multi-login Logic for Android Clients
                         if total > MAX_LOGIN:
                             subprocess.run(f"pkill -KILL -u {user}", shell=True, stderr=subprocess.DEVNULL)
-                            log_event(f"MULTI-LOGIN KICK: {user} used {total} devices.")
+                            log_event(f"MULTI-LOGIN KICK: {user} used {total} connections.")
                             send_alert(f"⚠️ <b>MULTI-LOGIN DETECTED</b>\n\n👤 User: <code>{user}</code>\n💻 Devices: {total}\n🛑 User has been kicked out.", f"{user}_multi")
                     except: pass
                     new_lines.append(line)
@@ -171,8 +168,9 @@ fun_create() {
     echo -e " ${BLUE}🔑 PASSWORD :${NC} ${WHITE}$p${NC}"
     read -p " $(echo -e ${BLUE}📅 Enter Date and Time : ${NC})" dt_input
     
-    d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
-    t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}')
+    # Improved Precision Parsing
+    d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
+    t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}' | head -1)
     [[ -z "$d" ]] && d="NEVER"
     [[ -z "$t" ]] && t="00:00"
     
@@ -202,8 +200,8 @@ fun_renew() {
     read -p " $(echo -e ${BLUE}👤 USERNAME : ${NC})" u
     if ! grep -q "^$u|" "$USER_DB"; then echo -e "${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
     read -p " $(echo -e ${BLUE}📅 Enter New Date and Time : ${NC})" dt_input
-    d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}')
-    t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}')
+    d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
+    t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}' | head -1)
     [[ -z "$d" ]] && d="NEVER"
     [[ -z "$t" ]] && t="23:59"
     sed -i "/^$u|/d" "$USER_DB"
@@ -372,7 +370,6 @@ from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageH
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(message)s')
 CONF_FILE = "/etc/xpanel/bot.conf"
 DB_FILE = "/etc/xpanel/users_db.txt"
-MIGRATION_FILE = "/root/migration_users.txt"
 TLINE = "============================"
 def load_config():
     c = {}
@@ -389,21 +386,9 @@ def get_status(u):
     except: pass
     return "🔴 OFFLINE"
 def get_menu():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👤 ADD USER", callback_data='add')],
-        [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ REMOVE", callback_data='del')],
-        [InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock_menu')],
-        [InlineKeyboardButton("📋 ALL USERS", callback_data='list'), InlineKeyboardButton("🔘 MONITOR", callback_data='onl')],
-        [InlineKeyboardButton("💾 SAVE DATA", callback_data='bak')],
-        [InlineKeyboardButton("⚙️ SETTINGS", callback_data='bot_set')]
-    ])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("👤 ADD USER", callback_data='add')],[InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ REMOVE", callback_data='del')],[InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock_menu')],[InlineKeyboardButton("📋 ALL USERS", callback_data='list'), InlineKeyboardButton("🔘 MONITOR", callback_data='onl')],[InlineKeyboardButton("💾 SAVE DATA", callback_data='bak')],[InlineKeyboardButton("⚙️ SETTINGS", callback_data='bot_set')]])
 def get_settings_menu():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("💻 Server Info", callback_data='set_info')],
-        [InlineKeyboardButton("🔄 Restart Monitor", callback_data='set_mon')],
-        [InlineKeyboardButton("🚀 Migration", callback_data='migrate')],
-        [InlineKeyboardButton("🔙 BACK", callback_data='back')]
-    ])
+    return InlineKeyboardMarkup([[InlineKeyboardButton("💻 Server Info", callback_data='set_info')],[InlineKeyboardButton("🔄 Restart Monitor", callback_data='set_mon')],[InlineKeyboardButton("🚀 Migration", callback_data='migrate')],[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
 def get_back_btn():
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
 def start(u, c):
@@ -428,22 +413,21 @@ def btn(u, c):
             q.edit_message_text("🔒/🔓 <b>Enter Username to Lock or Unlock:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif d.startswith('do_lock_'):
             usr = d.split('_', 2)[2]
-            subprocess.run(f"usermod -L {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            subprocess.run(f"pkill -KILL -u {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(f"usermod -L {usr}", shell=True, stdout=subprocess.DEVNULL); subprocess.run(f"pkill -KILL -u {usr}", shell=True, stdout=subprocess.DEVNULL)
             q.edit_message_text(f"⛔ <b>LOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
         elif d.startswith('do_unlock_'):
             usr = d.split('_', 2)[2]
-            subprocess.run(f"usermod -U {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(f"usermod -U {usr}", shell=True, stdout=subprocess.DEVNULL)
             q.edit_message_text(f"🔓 <b>UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
         elif d == 'list':
-            body = f"<b>{TLINE}</b>\n📋 <b>ALL USERS</b>\n<b>{TLINE}</b>\n\n"
+            body = f"<b>{TLINE}</b>\n📋 <b>LIST ACCOUNTS</b>\n<b>{TLINE}</b>\n\n"
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
                     p = l.strip().split('|')
                     if len(p) < 3 or "root" in p[0]: continue
                     usr, date, tm = p[0], p[1], p[2]
                     lock_icon = ""
-                    if subprocess.run(f"grep '^{usr}:!' /etc/shadow", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0: lock_icon = " ⛔"
+                    if subprocess.run(f"grep '^{usr}:!' /etc/shadow", shell=True, stdout=subprocess.DEVNULL).returncode == 0: lock_icon = " ⛔"
                     body += f"👤 <code>{usr}</code>{lock_icon}\n📅 <code>{date} {tm}</code>\n\n"
             q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif d == 'onl':
@@ -452,31 +436,15 @@ def btn(u, c):
                 for l in open(DB_FILE):
                     usr = l.split('|')[0]
                     if not usr or "root" in usr: continue
-                    if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0: continue
+                    if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL).returncode != 0: continue
                     st = get_status(usr)
                     body += f"👤 <code>{usr}</code>\n{st}\n\n"
             q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
-        elif d == 'bak':
-            if os.path.exists(DB_FILE): c.bot.send_document(ADMIN_ID, open(DB_FILE, 'rb'))
-            q.edit_message_text("✅ <b>DATA SAVED & SENT!</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
         elif d == 'bot_set':
             q.edit_message_text("⚙️ <b>SETTINGS</b>\nChoose an option:", parse_mode=ParseMode.HTML, reply_markup=get_settings_menu())
-        elif d == 'set_info':
-            try:
-                up = subprocess.getoutput("uptime -p")
-                ram = subprocess.getoutput("free -m | awk 'NR==2{printf \"%.2f%%\", $3*100/$2 }'")
-                cpu = subprocess.getoutput("top -bn1 | grep load | awk '{printf \"%.2f%%\", $(NF-2)}'")
-                msg = f"💻 <b>SERVER INFO</b>\n\n⏱ <b>Uptime:</b> {up}\n🧠 <b>RAM:</b> {ram}\n⚙️ <b>CPU Load:</b> {cpu}"
-            except: msg = "💻 <b>SERVER INFO</b>\nError fetching info."
-            q.edit_message_text(msg, parse_mode=ParseMode.HTML, reply_markup=get_settings_menu())
         elif d == 'set_mon':
             subprocess.run("systemctl restart kp_monitor", shell=True)
             q.edit_message_text("✅ <b>Monitor Restarted!</b>", parse_mode=ParseMode.HTML, reply_markup=get_settings_menu())
-        elif d == 'migrate':
-            if os.path.exists(DB_FILE):
-                subprocess.run(f"cp {DB_FILE} {MIGRATION_FILE}", shell=True)
-                c.bot.send_document(ADMIN_ID, open(MIGRATION_FILE, 'rb'), caption="🚀 <b>MIGRATION FILE</b>", parse_mode=ParseMode.HTML)
-                q.edit_message_text("✅ <b>MIGRATION FILE SENT!</b>", parse_mode=ParseMode.HTML, reply_markup=get_settings_menu())
     except: pass
 def txt(u, c):
     if u.effective_user.id != ADMIN_ID: return
@@ -486,17 +454,13 @@ def txt(u, c):
             usr = msg
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔒 LOCK", callback_data=f"do_lock_{usr}"), InlineKeyboardButton("🔓 UNLOCK", callback_data=f"do_unlock_{usr}")],[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             u.message.reply_text(f"Select action for <b>{usr}</b>:", parse_mode=ParseMode.HTML, reply_markup=kb)
-            c.user_data['act'] = '' 
         elif act == 'a_datetime':
             usr = c.user_data['u']; pwd = "12345"
-            dm = re.search(r'\d{4}-\d{2}-\d{2}', msg)
-            tm = re.search(r'\d{2}:\d{2}', msg)
-            d = dm.group(0) if dm else "NEVER"
-            t = tm.group(0) if tm else "00:00"
-            subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL)
-            subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL)
+            dm = re.search(r'\d{4}-\d{2}-\d{2}', msg); tm = re.search(r'\d{2}:\d{2}', msg)
+            d = dm.group(0) if dm else "NEVER"; t = tm.group(0) if tm else "00:00"
+            subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL); subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL)
             open(DB_FILE, 'a').write(f"{usr}|{d}|{t}|SSH\n")
-            resp = (f"<b>{TLINE}</b>\nACCOUNT \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{d}</code>\n⏰ Time     : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
+            resp = (f"<b>{TLINE}</b>\n          ACCOUNT \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{d}</code>\n⏰ Time     : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
             u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif act == 'r_datetime':
             c.user_data['ru'] = msg; c.user_data['act'] = 'r_val'
@@ -518,8 +482,7 @@ def main():
     if not TOKEN: return
     up = Updater(TOKEN, use_context=True)
     up.dispatcher.add_handler(CommandHandler('start', start))
-    up.dispatcher.add_handler(CallbackQueryHandler(btn))
-    up.dispatcher.add_handler(MessageHandler(Filters.text, txt))
+    up.dispatcher.add_handler(CallbackQueryHandler(btn)); up.dispatcher.add_handler(MessageHandler(Filters.text, txt))
     up.start_polling(); up.idle()
 if __name__ == '__main__': main()
 EOF
