@@ -28,8 +28,9 @@ MIGRATION_FILE="/root/migration_users.txt"
 MY_TOKEN="8134717950:AAGj2wWaABBUWbPLa7jX6yEWHgwjgUelpwg"
 MY_ID="7587310857"
 
+# تغيير اللون إلى الأزرق النقي بدلاً من السماوي
 RED=$'\033[1;31m'; GREEN=$'\033[1;32m'; YELLOW=$'\033[1;33m'
-BLUE=$'\033[1;36m'; NC=$'\033[0m'; WHITE=$'\033[1;37m'
+BLUE=$'\033[1;34m'; NC=$'\033[0m'; WHITE=$'\033[1;37m'
 LINE="${BLUE}===============================================${NC}"
 
 mkdir -p /etc/xpanel "$BACKUP_DIR"
@@ -189,9 +190,9 @@ fun_create() {
     echo "$u:$p" | chpasswd >/dev/null 2>&1
     echo "$u|$d|$t|SSH" >> "$USER_DB"
     clear
-    echo -e "${PURPLE}===============================================${NC}"
+    echo -e "${LINE}"
     echo -e "                    ${WHITE}ACCOUNT${NC} "
-    echo -e "${PURPLE}===============================================${NC}"
+    echo -e "${LINE}"
     echo -e ""
     echo -e " ${BLUE}👤 Username :${NC} ${WHITE}$u${NC}"
     echo -e " ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
@@ -377,7 +378,7 @@ fun_violations() {
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${BLUE}INSTALLING BOT WITH PERFECT CENTERING...${NC}"
+    clear; echo -e "${BLUE}INSTALLING BOT WITH PURE BLUE UI...${NC}"
     pip3 install python-telegram-bot==13.7 schedule requests --break-system-packages >/dev/null 2>&1 || \
     pip3 install python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
@@ -467,76 +468,117 @@ def btn(u, c):
             lines = [l for l in open(DB_FILE) if not l.startswith(f"{usr}|")]
             lines.append(f"{usr}|NEVER|00:00|Renew\n")
             open(DB_FILE, 'w').writelines(lines)
-            q.edit_message_text(f"✅ <b>RENEWED:</b> <code>{usr}</code> (Unlimited)", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+            q.edit_message_text(f"✅ <b>RENEWED:</b> <code>{usr}</code> (Unlimited)", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
-        elif d == 'del': c.user_data['act']='d1'; q.edit_message_text("🗑️ <b>Username to Delete:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+        elif d == 'del': 
+            c.user_data['act']='d1'
+            q.edit_message_text("🗑️ <b>Username to Delete:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            
+        elif d == 'del_yes':
+            usr = c.user_data.get('del_u')
+            if usr:
+                os.system(f"killall -9 -u {usr} 2>/dev/null; pkill -KILL -u {usr} 2>/dev/null")
+                subprocess.run(f"userdel -f {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+                if os.path.exists(DB_FILE):
+                    lines = [l for l in open(DB_FILE) if not l.startswith(f"{usr}|")]
+                    open(DB_FILE, 'w').writelines(lines)
+                q.edit_message_text(f"🗑️ <b>DELETED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+                
+        elif d == 'del_no':
+            q.edit_message_text("❌ <b>Deletion Cancelled.</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+
         elif d == 'lock_menu':
             c.user_data['act']='lu_user'
             q.edit_message_text("🔒/🔓 <b>Enter Username to Lock or Unlock:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            
         elif d.startswith('do_lock_'):
             usr = d.split('_', 2)[2]
             subprocess.run(f"usermod -L {usr}", shell=True, stdout=subprocess.DEVNULL)
             os.system(f"killall -9 -u {usr} 2>/dev/null; pkill -KILL -u {usr} 2>/dev/null")
-            q.edit_message_text(f"⛔ <b>LOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+            q.edit_message_text(f"⛔ <b>LOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            
         elif d.startswith('do_unlock_'):
             usr = d.split('_', 2)[2]
             subprocess.run(f"usermod -U {usr}", shell=True, stdout=subprocess.DEVNULL)
-            q.edit_message_text(f"🔓 <b>UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+            q.edit_message_text(f"🔓 <b>UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif d == 'list':
-            msgs = []
-            body = f"<b>{TLINE}</b>\n         <b>ALL USERS</b>         \n<b>{TLINE}</b>\n\n"
             if os.path.exists(DB_FILE):
                 try: shadow_data = open('/etc/shadow', 'r').read()
                 except: shadow_data = ""
-                for l in open(DB_FILE):
-                    p = l.strip().split('|')
-                    if len(p) < 3 or "root" in p[0]: continue
-                    usr, date, tm = p[0], p[1], p[2]
-                    date_str = "NEVER" if date == "NEVER" else f"{date} {tm}"
-                    lock_icon = " ⛔" if f"\n{usr}:!" in shadow_data or shadow_data.startswith(f"{usr}:!") else ""
-                    line = f"👤 <code>{usr}</code>{lock_icon}\n📅 <code>{date_str}</code>\n\n"
-                    if len(body) + len(line) > 3800:
-                        msgs.append(body)
-                        body = ""
-                    body += line
-            if body: msgs.append(body)
-            if not msgs:
-                q.edit_message_text("No users found.", reply_markup=get_back_btn())
+                
+                valid_lines = [l.strip().split('|') for l in open(DB_FILE) if len(l.strip().split('|')) >= 3 and "root" not in l]
+                if not valid_lines:
+                    q.edit_message_text("No users found.", reply_markup=get_back_btn())
+                    return
+                
+                chunk_size = 100
+                chunks = [valid_lines[i:i + chunk_size] for i in range(0, len(valid_lines), chunk_size)]
+                
+                for idx, chunk in enumerate(chunks):
+                    total_pages = len(chunks)
+                    if total_pages > 1:
+                        pg_str = f"ALL USERS (Page {idx+1}/{total_pages})"
+                        sp_l = max(0, (28 - len(pg_str)) // 2)
+                        sp_r = max(0, 28 - len(pg_str) - sp_l)
+                        header = f"<b>{TLINE}</b>\n{' '*sp_l}<b>{pg_str}</b>{' '*sp_r}\n<b>{TLINE}</b>\n\n"
+                    else:
+                        header = f"<b>{TLINE}</b>\n         <b>ALL USERS</b>          \n<b>{TLINE}</b>\n\n"
+                        
+                    body = header
+                    for p in chunk:
+                        usr, date, tm = p[0], p[1], p[2]
+                        date_str = "NEVER" if date == "NEVER" else f"{date} {tm}"
+                        lock_icon = " ⛔" if f"\n{usr}:!" in shadow_data or shadow_data.startswith(f"{usr}:!") else ""
+                        body += f"👤 <code>{usr}</code>{lock_icon}\n📅 <code>{date_str}</code>\n\n"
+                    
+                    if idx == 0:
+                        q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if total_pages == 1 else None)
+                    else:
+                        c.bot.send_message(chat_id=u.effective_chat.id, text=body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if idx == total_pages - 1 else None)
             else:
-                q.edit_message_text(msgs[0], parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if len(msgs)==1 else None)
-                for i in range(1, len(msgs)):
-                    c.bot.send_message(chat_id=u.effective_chat.id, text=msgs[i], parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if i == len(msgs)-1 else None)
+                q.edit_message_text("No users found.", reply_markup=get_back_btn())
 
         elif d == 'onl':
-            msgs = []
-            body = f"<b>{TLINE}</b>\n        <b>LIVE MONITOR</b>        \n<b>{TLINE}</b>\n\n"
             if os.path.exists(DB_FILE):
                 try:
                     active_users_raw = subprocess.getoutput("ps -eo user,comm | grep -E 'sshd|dropbear' | awk '{print $1}'").split()
                     active_set = set(active_users_raw)
                 except: active_set = set()
                 
-                for l in open(DB_FILE):
-                    usr = l.split('|')[0]
-                    if not usr or "root" in usr: continue
-                    st = "🟢 ONLINE" if usr in active_set else "🔴 OFFLINE"
-                    line = f"👤 <code>{usr}</code>\n{st}\n\n"
-                    if len(body) + len(line) > 3800:
-                        msgs.append(body)
-                        body = ""
-                    body += line
-            if body: msgs.append(body)
-            if not msgs:
-                q.edit_message_text("No users found.", reply_markup=get_back_btn())
+                valid_lines = [l.strip().split('|')[0] for l in open(DB_FILE) if len(l.strip().split('|')) >= 3 and "root" not in l]
+                if not valid_lines:
+                    q.edit_message_text("No users found.", reply_markup=get_back_btn())
+                    return
+                
+                chunk_size = 100
+                chunks = [valid_lines[i:i + chunk_size] for i in range(0, len(valid_lines), chunk_size)]
+                
+                for idx, chunk in enumerate(chunks):
+                    total_pages = len(chunks)
+                    if total_pages > 1:
+                        pg_str = f"LIVE MONITOR (Page {idx+1}/{total_pages})"
+                        sp_l = max(0, (28 - len(pg_str)) // 2)
+                        sp_r = max(0, 28 - len(pg_str) - sp_l)
+                        header = f"<b>{TLINE}</b>\n{' '*sp_l}<b>{pg_str}</b>{' '*sp_r}\n<b>{TLINE}</b>\n\n"
+                    else:
+                        header = f"<b>{TLINE}</b>\n        <b>LIVE MONITOR</b>        \n<b>{TLINE}</b>\n\n"
+                        
+                    body = header
+                    for usr in chunk:
+                        st = "🟢 ONLINE" if usr in active_set else "🔴 OFFLINE"
+                        body += f"👤 <code>{usr}</code>\n{st}\n\n"
+                    
+                    if idx == 0:
+                        q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if total_pages == 1 else None)
+                    else:
+                        c.bot.send_message(chat_id=u.effective_chat.id, text=body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if idx == total_pages - 1 else None)
             else:
-                q.edit_message_text(msgs[0], parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if len(msgs)==1 else None)
-                for i in range(1, len(msgs)):
-                    c.bot.send_message(chat_id=u.effective_chat.id, text=msgs[i], parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if i == len(msgs)-1 else None)
+                q.edit_message_text("No users found.", reply_markup=get_back_btn())
 
         elif d == 'bak':
             if os.path.exists(DB_FILE): c.bot.send_document(ADMIN_ID, open(DB_FILE, 'rb'))
-            q.edit_message_text("✅ <b>DATA SAVED & SENT!</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+            q.edit_message_text("✅ <b>DATA SAVED & SENT!</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif d == 'bot_set':
             q.edit_message_text("⚙️ <b>SETTINGS</b>\nChoose an option:", parse_mode=ParseMode.HTML, reply_markup=get_settings_menu())
         elif d == 'set_info':
@@ -565,6 +607,7 @@ def txt(u, c):
             usr = msg
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔒 LOCK", callback_data=f"do_lock_{usr}"), InlineKeyboardButton("🔓 UNLOCK", callback_data=f"do_unlock_{usr}")],[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             u.message.reply_text(f"Select action for <b>{usr}</b>:", parse_mode=ParseMode.HTML, reply_markup=kb)
+            c.user_data['act'] = ''
         
         elif act == 'r_user':
             c.user_data['ru'] = msg
@@ -587,14 +630,18 @@ def txt(u, c):
             lines = [l for l in open(DB_FILE) if not l.startswith(f"{usr}|")]
             lines.append(f"{usr}|{d}|{t}|Renew\n")
             open(DB_FILE, 'w').writelines(lines)
-            u.message.reply_text(f"✅ <b>RENEWED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+            u.message.reply_text(f"✅ <b>RENEWED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             
         elif act == 'd1':
-            os.system(f"killall -9 -u {msg} 2>/dev/null; pkill -KILL -u {msg} 2>/dev/null")
-            subprocess.run(f"userdel -f {msg}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            lines = [l for l in open(DB_FILE) if not l.startswith(f"{msg}|")]
-            open(DB_FILE, 'w').writelines(lines)
-            u.message.reply_text(f"🗑️ <b>DELETED:</b> <code>{msg}</code>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+            usr_to_del = msg
+            c.user_data['del_u'] = usr_to_del
+            kb = InlineKeyboardMarkup([
+                [InlineKeyboardButton("🟢 YES", callback_data='del_yes'), InlineKeyboardButton("🔴 NO", callback_data='del_no')],
+                [InlineKeyboardButton("🔙 BACK", callback_data='back')]
+            ])
+            u.message.reply_text(f"⚠️ <b>Are you sure you want to delete</b> <code>{usr_to_del}</code><b>?</b>", parse_mode=ParseMode.HTML, reply_markup=kb)
+            c.user_data['act'] = ''
+            
     except: pass
 
 def main():
