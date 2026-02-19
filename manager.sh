@@ -377,7 +377,7 @@ fun_violations() {
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${BLUE}INSTALLING BOT WITH PERFECT BUTTON SIZES...${NC}"
+    clear; echo -e "${BLUE}INSTALLING BOT WITH PERFECT CENTERING...${NC}"
     pip3 install python-telegram-bot==13.7 schedule requests --break-system-packages >/dev/null 2>&1 || \
     pip3 install python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
@@ -405,7 +405,6 @@ def load_config():
 cfg = load_config(); TOKEN = cfg.get("BOT_TOKEN"); ADMIN_ID = int(cfg.get("ADMIN_ID", 0))
 
 def get_menu():
-    # PERFECT SYMMETRICAL LAYOUT - NO CUT TEXT
     return InlineKeyboardMarkup([
         [InlineKeyboardButton("👤 ADD USER", callback_data='add')],
         [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ REMOVE", callback_data='del')],
@@ -441,7 +440,7 @@ def btn(u, c):
                 if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0: break
                 i += 1
             c.user_data['u'] = usr
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES (Set Date)", callback_data='add_yes'), InlineKeyboardButton("🔴 NO (Unlimited)", callback_data='add_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES", callback_data='add_yes'), InlineKeyboardButton("🔴 NO", callback_data='add_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             q.edit_message_text(f"👤 Username: <code>{usr}</code>\n\n⏳ <b>Set Expiry Date?</b>", parse_mode=ParseMode.HTML, reply_markup=kb)
             
         elif d == 'add_yes':
@@ -452,7 +451,7 @@ def btn(u, c):
             usr = c.user_data['u']; pwd = "12345"; dt = "NEVER"; tm = "00:00"
             subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL); subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL)
             open(DB_FILE, 'a').write(f"{usr}|{dt}|{tm}|SSH\n")
-            resp = (f"<b>{TLINE}</b>\n          <b>ACCOUNT</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{dt}</code>\n⏰ Time     : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
+            resp = (f"<b>{TLINE}</b>\n           <b>ACCOUNT</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{dt}</code>\n⏰ Time     : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
             q.edit_message_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif d == 'ren': 
@@ -486,7 +485,7 @@ def btn(u, c):
 
         elif d == 'list':
             msgs = []
-            body = f"<b>{TLINE}</b>\n📋 <b>ALL USERS</b>\n<b>{TLINE}</b>\n\n"
+            body = f"<b>{TLINE}</b>\n         <b>ALL USERS</b>         \n<b>{TLINE}</b>\n\n"
             if os.path.exists(DB_FILE):
                 try: shadow_data = open('/etc/shadow', 'r').read()
                 except: shadow_data = ""
@@ -511,7 +510,7 @@ def btn(u, c):
 
         elif d == 'onl':
             msgs = []
-            body = f"<b>{TLINE}</b>\n🔘 <b>LIVE MONITOR</b>\n<b>{TLINE}</b>\n\n"
+            body = f"<b>{TLINE}</b>\n        <b>LIVE MONITOR</b>        \n<b>{TLINE}</b>\n\n"
             if os.path.exists(DB_FILE):
                 try:
                     active_users_raw = subprocess.getoutput("ps -eo user,comm | grep -E 'sshd|dropbear' | awk '{print $1}'").split()
@@ -569,7 +568,7 @@ def txt(u, c):
         
         elif act == 'r_user':
             c.user_data['ru'] = msg
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES (Set Date)", callback_data='ren_yes'), InlineKeyboardButton("🔴 NO (Unlimited)", callback_data='ren_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES", callback_data='ren_yes'), InlineKeyboardButton("🔴 NO", callback_data='ren_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             u.message.reply_text(f"⏳ <b>Set Expiry Date for {msg}?</b>", parse_mode=ParseMode.HTML, reply_markup=kb)
             c.user_data['act'] = ''
 
@@ -579,7 +578,7 @@ def txt(u, c):
             d = dm.group(0) if dm else "NEVER"; t = tm.group(0) if tm else "00:00"
             subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL); subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL)
             open(DB_FILE, 'a').write(f"{usr}|{d}|{t}|SSH\n")
-            resp = (f"<b>{TLINE}</b>\n          <b>ACCOUNT</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{d}</code>\n⏰ Time     : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
+            resp = (f"<b>{TLINE}</b>\n           <b>ACCOUNT</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{d}</code>\n⏰ Time     : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
             u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             
         elif act == 'r_val':
