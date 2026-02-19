@@ -28,7 +28,6 @@ MIGRATION_FILE="/root/migration_users.txt"
 MY_TOKEN="8134717950:AAGj2wWaABBUWbPLa7jX6yEWHgwjgUelpwg"
 MY_ID="7587310857"
 
-# تغيير اللون إلى الأزرق النقي بدلاً من السماوي
 RED=$'\033[1;31m'; GREEN=$'\033[1;32m'; YELLOW=$'\033[1;33m'
 BLUE=$'\033[1;34m'; NC=$'\033[0m'; WHITE=$'\033[1;37m'
 LINE="${BLUE}===============================================${NC}"
@@ -100,18 +99,21 @@ def check_loop():
                         new_lines.append(line); continue
                     
                     expired = False
-                    if exp_date.lower() != "never":
+                    if exp_date.upper() not in ["NEVER", "EXPIRED"]:
                         try:
                             exp = datetime.datetime.strptime(f"{exp_date} {exp_time}", "%Y-%m-%d %H:%M")
                             if now >= exp:
+                                os.system(f"usermod -L {user} 2>/dev/null")
                                 os.system(f"killall -9 -u {user} 2>/dev/null")
                                 os.system(f"pkill -KILL -u {user} 2>/dev/null")
-                                os.system(f"userdel -f {user} 2>/dev/null")
                                 status_changed = True; expired = True
-                                log_event(f"ACCOUNT EXPIRED: {user} deleted.")
-                                send_alert(f"🗑️ <b>ACCOUNT EXPIRED</b>\n\n👤 User: <code>{user}</code>\n🛑 Account automatically deleted.", f"{user}_exp")
+                                log_event(f"ACCOUNT EXPIRED: {user} locked.")
+                                send_alert(f"🔒 <b>ACCOUNT EXPIRED</b>\n\n👤 User: <code>{user}</code>\n🛑 Account automatically locked.", f"{user}_exp")
                         except: pass
-                    if expired: continue
+                    
+                    if expired:
+                        new_lines.append(f"{user}|EXPIRED|00:00|SSH\n")
+                        continue
 
                     try:
                         ssh_procs = subprocess.getoutput(f"ps -u {user} -o comm= 2>/dev/null | grep -cE 'sshd|dropbear'")
@@ -270,7 +272,7 @@ fun_list() {
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
         if id "$u" &>/dev/null; then
-             [[ "$d" == "NEVER" ]] && DATE_STR="NEVER" || DATE_STR="$d $t"
+             if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
              if echo "$SHADOW_CACHE" | grep -q "^${u}:!"; then LOCK_STAT="⛔"; else LOCK_STAT="  "; fi
              printf " ${BLUE}👤 %-12s${NC} %s ${BLUE}📅 %s${NC}\n" "$u" "$LOCK_STAT" "$DATE_STR"
         fi
@@ -375,10 +377,35 @@ fun_violations() {
     pause
 }
 
+fun_bulk_create() {
+    draw_header
+    echo -e "               📦 ${BLUE}BULK CREATE${NC}"
+    echo -e "${LINE}"
+    read -p " $(echo -e ${BLUE}🔢 How many accounts? : ${NC})" count
+    if ! [[ "$count" =~ ^[0-9]+$ ]]; then echo -e "${RED} INVALID NUMBER!${NC}"; pause; return; fi
+    echo -e " ${YELLOW}Creating $count accounts... Please wait...${NC}"
+    created=0
+    i=1
+    while [ $created -lt "$count" ]; do
+        u="USER${i}"
+        if ! id "$u" &>/dev/null && ! grep -q "^$u|" "$USER_DB"; then
+            useradd -M -s /bin/false "$u" >/dev/null 2>&1
+            echo "$u:12345" | chpasswd >/dev/null 2>&1
+            echo "$u|NEVER|00:00|SSH" >> "$USER_DB"
+            ((created++))
+            echo -e " ✅ Created: ${WHITE}$u${NC} (Pass: 12345)"
+        fi
+        ((i++))
+    done
+    echo -e "${LINE}"
+    echo -e "${GREEN} ✅ $count ACCOUNTS CREATED SUCCESSFULLY!${NC}"
+    pause
+}
+
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${BLUE}INSTALLING BOT WITH PURE BLUE UI...${NC}"
+    clear; echo -e "${BLUE}INSTALLING BOT WITH SMART LOCK & BULK FEATURE...${NC}"
     pip3 install python-telegram-bot==13.7 schedule requests --break-system-packages >/dev/null 2>&1 || \
     pip3 install python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
@@ -407,7 +434,7 @@ cfg = load_config(); TOKEN = cfg.get("BOT_TOKEN"); ADMIN_ID = int(cfg.get("ADMIN
 
 def get_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👤 ADD USER", callback_data='add')],
+        [InlineKeyboardButton("👤 ADD USER", callback_data='add'), InlineKeyboardButton("📦 BULK CREATE", callback_data='bulk')],
         [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ REMOVE", callback_data='del')],
         [InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock_menu')],
         [InlineKeyboardButton("📋 ALL USERS", callback_data='list')],
@@ -454,6 +481,10 @@ def btn(u, c):
             open(DB_FILE, 'a').write(f"{usr}|{dt}|{tm}|SSH\n")
             resp = (f"<b>{TLINE}</b>\n           <b>ACCOUNT</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{dt}</code>\n⏰ Time     : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
             q.edit_message_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            
+        elif d == 'bulk':
+            c.user_data['act'] = 'bulk_amt'
+            q.edit_message_text("📦 <b>Enter the number of accounts to create:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif d == 'ren': 
             c.user_data['act']='r_user'
@@ -468,7 +499,8 @@ def btn(u, c):
             lines = [l for l in open(DB_FILE) if not l.startswith(f"{usr}|")]
             lines.append(f"{usr}|NEVER|00:00|Renew\n")
             open(DB_FILE, 'w').writelines(lines)
-            q.edit_message_text(f"✅ <b>RENEWED:</b> <code>{usr}</code> (Unlimited)", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            subprocess.run(f"usermod -U {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            q.edit_message_text(f"✅ <b>RENEWED & UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif d == 'del': 
             c.user_data['act']='d1'
@@ -523,12 +555,12 @@ def btn(u, c):
                         sp_r = max(0, 28 - len(pg_str) - sp_l)
                         header = f"<b>{TLINE}</b>\n{' '*sp_l}<b>{pg_str}</b>{' '*sp_r}\n<b>{TLINE}</b>\n\n"
                     else:
-                        header = f"<b>{TLINE}</b>\n         <b>ALL USERS</b>          \n<b>{TLINE}</b>\n\n"
+                        header = f"<b>{TLINE}</b>\n         <b>ALL USERS</b>         \n<b>{TLINE}</b>\n\n"
                         
                     body = header
                     for p in chunk:
                         usr, date, tm = p[0], p[1], p[2]
-                        date_str = "NEVER" if date == "NEVER" else f"{date} {tm}"
+                        date_str = date if date in ["NEVER", "EXPIRED"] else f"{date} {tm}"
                         lock_icon = " ⛔" if f"\n{usr}:!" in shadow_data or shadow_data.startswith(f"{usr}:!") else ""
                         body += f"👤 <code>{usr}</code>{lock_icon}\n📅 <code>{date_str}</code>\n\n"
                     
@@ -603,7 +635,30 @@ def txt(u, c):
     if u.effective_user.id != ADMIN_ID: return
     msg = u.message.text; act = c.user_data.get('act')
     try:
-        if act == 'lu_user':
+        if act == 'bulk_amt':
+            if not msg.isdigit():
+                u.message.reply_text("❌ <b>Invalid Number.</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+                return
+            count = int(msg)
+            if count > 150: count = 150
+            u.message.reply_text(f"⏳ <b>Creating {count} accounts... Please wait.</b>", parse_mode=ParseMode.HTML)
+            created = 0
+            i = 1
+            db_content = open(DB_FILE, 'r').read() if os.path.exists(DB_FILE) else ""
+            new_entries = []
+            while created < count:
+                usr = f"USER{i}"
+                if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0 and f"{usr}|" not in db_content:
+                    subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL)
+                    subprocess.run(f"echo '{usr}:12345' | chpasswd", shell=True, stdout=subprocess.DEVNULL)
+                    new_entries.append(f"{usr}|NEVER|00:00|SSH\n")
+                    created += 1
+                i += 1
+            open(DB_FILE, 'a').writelines(new_entries)
+            u.message.reply_text(f"✅ <b>Successfully created {count} accounts!</b>\nAll set to <b>NEVER</b> expiry.", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            c.user_data['act'] = ''
+
+        elif act == 'lu_user':
             usr = msg
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔒 LOCK", callback_data=f"do_lock_{usr}"), InlineKeyboardButton("🔓 UNLOCK", callback_data=f"do_unlock_{usr}")],[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             u.message.reply_text(f"Select action for <b>{usr}</b>:", parse_mode=ParseMode.HTML, reply_markup=kb)
@@ -630,7 +685,8 @@ def txt(u, c):
             lines = [l for l in open(DB_FILE) if not l.startswith(f"{usr}|")]
             lines.append(f"{usr}|{d}|{t}|Renew\n")
             open(DB_FILE, 'w').writelines(lines)
-            u.message.reply_text(f"✅ <b>RENEWED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            subprocess.run(f"usermod -U {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            u.message.reply_text(f"✅ <b>RENEWED & UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             
         elif act == 'd1':
             usr_to_del = msg
@@ -678,6 +734,7 @@ while true; do
     echo -e " ${BLUE}[7] 💾 BACKUP DATA${NC}"
     echo -e " ${BLUE}[8] 🔔 ALERTS LOG${NC}"
     echo -e " ${BLUE}[9] ⚙️ SETTINGS${NC}"
+    echo -e " ${BLUE}[10] 📦 BULK CREATE${NC}"
     echo -e " ${BLUE}[0] 🚪 EXIT${NC}"
     echo -e "${LINE}"
     echo -e " ${BLUE}SELECT:${NC}"
@@ -693,6 +750,7 @@ while true; do
         7|07) fun_backup ;; 
         8|08) fun_violations ;; 
         9|09) fun_settings ;; 
+        10) fun_bulk_create ;; 
         0|00) exit 0 ;;
         *) echo -e "${RED} INVALID OPTION!${NC}" ; sleep 1 ;;
     esac
