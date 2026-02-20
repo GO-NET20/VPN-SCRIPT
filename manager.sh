@@ -25,7 +25,7 @@ LOG_FILE="/var/log/kp_manager.log"
 BACKUP_DIR="/root/backups"
 MIGRATION_FILE="/root/migration_users.txt"
 
-MY_TOKEN="8275679858:AAFShhXoDbS2vOMdY4AK349_CBEPoY71q_k"
+MY_TOKEN="8134717950:AAGj2wWaABBUWbPLa7jX6yEWHgwjgUelpwg"
 MY_ID="7587310857"
 
 RED=$'\033[1;31m'; GREEN=$'\033[1;32m'; YELLOW=$'\033[1;33m'
