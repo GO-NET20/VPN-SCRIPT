@@ -352,7 +352,7 @@ fun_settings() {
         echo -e " ${BLUE}[4] 📥 RESTORE USERS${NC}"
         echo -e " ${BLUE}[5] 🔙 BACK${NC}"
         echo -e "${LINE}"
-        echo -ne " ${BLUE}SELECT: ${NC}"
+        echo -ne "  ${BLUE}SELECT: ${NC}"
         read s
         case "$s" in
             1) fun_install_bot ;;
@@ -703,17 +703,17 @@ EOF
 while true; do
     draw_header
     echo -e "  ${BLUE}[01] 👤 CREATE ACCOUNT${NC}"
-    echo -e "  ${BLUE}[02] 🔄 RENEW ACCOUNT${NC}"
-    echo -e "  ${BLUE}[03] 🗑 DELETE ACCOUNT${NC}"
+    echo -e "  ${BLUE}[02] 🔄  RENEW ACCOUNT${NC}"
+    echo -e "  ${BLUE}[03] 🗑  DELETE ACCOUNT${NC}"
     echo -e "  ${BLUE}[04] 🔒 LOCK ACCOUNT${NC}"
     echo -e "  ${BLUE}[05] 📋 LIST ACCOUNTS${NC}"
-    echo -e "  ${BLUE}[06] 👁 MONITOR ACCOUNT${NC}"
+    echo -e "  ${BLUE}[06] 👁  MONITOR ACCOUNT${NC}"
     echo -e "  ${BLUE}[07] 💾 BACKUP DATA${NC}"
     echo -e "  ${BLUE}[08] 🔔 ALERTS LOG${NC}"
-    echo -e "  ${BLUE}[09] ⚙ SETTINGS${NC}"
+    echo -e "  ${BLUE}[09] ⚙  SETTINGS${NC}  "
     echo -e "  ${BLUE}[00] 🚪 EXIT${NC}"
     echo -e "${LINE}"
-    echo -ne "        ${BLUE}SELECT: ${NC}"
+    echo -ne "  ${BLUE}SELECT:${NC} "
     read o
     case "$o" in
         1|01) fun_create ;; 
