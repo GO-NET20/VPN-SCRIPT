@@ -175,10 +175,12 @@ fun_create() {
     echo -e " ${BLUE}👤 USERNAME :${NC} ${WHITE}$u${NC}"
     echo -e " ${BLUE}🔑 PASSWORD :${NC} ${WHITE}$p${NC}"
     
-    read -p " $(echo -e ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC})" exp_choice
+    echo -ne " ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC}"
+    read exp_choice
     
     if [[ "${exp_choice,,}" == "y" ]]; then
-        read -p " $(echo -e ${BLUE}📅 Enter Date and Time : ${NC})" dt_input
+        echo -ne " ${BLUE}📅 Enter Date and Time : ${NC}"
+        read dt_input
         d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
         t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}' | head -1)
         [[ -z "$d" ]] && d="NEVER"
@@ -211,12 +213,15 @@ fun_renew() {
     draw_header
     echo -e "               🔄 ${BLUE}RENEW ACCOUNT${NC}"
     echo -e "${LINE}"
-    read -p " $(echo -e ${BLUE}👤 USERNAME : ${NC})" u
-    if ! grep -q "^$u|" "$USER_DB"; then echo -e "${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
+    echo -ne " ${BLUE}👤 USERNAME : ${NC}"
+    read u
+    if ! grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
     
-    read -p " $(echo -e ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC})" exp_choice
+    echo -ne " ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC}"
+    read exp_choice
     if [[ "${exp_choice,,}" == "y" ]]; then
-        read -p " $(echo -e ${BLUE}📅 Enter New Date and Time : ${NC})" dt_input
+        echo -ne " ${BLUE}📅 Enter New Date and Time : ${NC}"
+        read dt_input
         d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
         t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}' | head -1)
         [[ -z "$d" ]] && d="NEVER"
@@ -229,20 +234,22 @@ fun_renew() {
     sed -i "/^$u|/d" "$USER_DB"
     echo "$u|$d|$t|Renew" >> "$USER_DB"
     usermod -U "$u" >/dev/null 2>&1
-    echo -e "${GREEN} ✅ RENEWED SUCCESSFULLY${NC}"; pause
+    echo -e "\n${GREEN} ✅ RENEWED SUCCESSFULLY${NC}"; pause
 }
 
 fun_remove() {
     draw_header
     echo -e "               🗑️ ${BLUE}REMOVE USER${NC}"
     echo -e "${LINE}"
-    read -p " $(echo -e ${BLUE}👤 USERNAME : ${NC})" u
-    read -p " $(echo -e ${BLUE}⚠️ CONFIRM? [Y/N]: ${NC})" c
+    echo -ne " ${BLUE}👤 USERNAME : ${NC}"
+    read u
+    echo -ne " ${BLUE}⚠️ CONFIRM? [Y/N]: ${NC}"
+    read c
     if [[ "${c,,}" == "y" ]]; then
         pkill -KILL -u "$u" >/dev/null 2>&1
         userdel -f "$u" >/dev/null 2>&1
         sed -i "/^$u|/d" "$USER_DB"
-        echo -e "${RED} 🗑️ DELETED SUCCESSFULLY${NC}"
+        echo -e "\n${RED} 🗑️ DELETED SUCCESSFULLY${NC}"
     fi
     pause
 }
@@ -251,14 +258,16 @@ fun_lock() {
     draw_header
     echo -e "               🔒 ${BLUE}LOCK/UNLOCK${NC}"
     echo -e "${LINE}"
-    read -p " $(echo -e ${BLUE}👤 USERNAME : ${NC})" u
+    echo -ne " ${BLUE}👤 USERNAME : ${NC}"
+    read u
     echo -e " ${BLUE}[1] LOCK ⛔${NC}"
     echo -e " ${BLUE}[2] UNLOCK 🔓${NC}"
-    read -p " $(echo -e ${BLUE}SELECT: ${NC})" s
+    echo -ne " ${BLUE}SELECT: ${NC}"
+    read s
     if [[ "$s" == "1" ]]; then
-        usermod -L "$u" >/dev/null 2>&1; pkill -KILL -u "$u" >/dev/null 2>&1; echo -e "${GREEN} ⛔ LOCKED${NC}"
+        usermod -L "$u" >/dev/null 2>&1; pkill -KILL -u "$u" >/dev/null 2>&1; echo -e "\n${GREEN} ⛔ LOCKED${NC}"
     else
-        usermod -U "$u" >/dev/null 2>&1; echo -e "${GREEN} 🔓 UNLOCKED${NC}"
+        usermod -U "$u" >/dev/null 2>&1; echo -e "\n${GREEN} 🔓 UNLOCKED${NC}"
     fi
     pause
 }
@@ -329,7 +338,7 @@ fun_import_users() {
         fi
     done < "$MIGRATION_FILE"
     cat "$MIGRATION_FILE" > "$USER_DB"
-    echo -e "${GREEN} ✅ RESTORED: $count USERS${NC}"; pause
+    echo -e "\n${GREEN} ✅ RESTORED: $count USERS${NC}"; pause
 }
 
 fun_settings() {
@@ -343,10 +352,11 @@ fun_settings() {
         echo -e " ${BLUE}[4] 📥 RESTORE USERS${NC}"
         echo -e " ${BLUE}[5] 🔙 BACK${NC}"
         echo -e "${LINE}"
-        read -p " $(echo -e ${BLUE}SELECT: ${NC})" s
+        echo -ne " ${BLUE}SELECT: ${NC}"
+        read s
         case "$s" in
             1) fun_install_bot ;;
-            2) timedatectl set-timezone Africa/Tunis; echo -e "${GREEN} ✅ TIMEZONE SET TO TUNIS${NC}"; pause ;;
+            2) timedatectl set-timezone Africa/Tunis; echo -e "\n${GREEN} ✅ TIMEZONE SET TO TUNIS${NC}"; pause ;;
             3) fun_export_users ;;
             4) fun_import_users ;;
             5) break ;;
@@ -668,7 +678,7 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload; systemctl enable sshbot >/dev/null 2>&1; systemctl restart sshbot
-    echo -e "${GREEN}✅ BOT INSTALLED SUCCESSFULLY!${NC}"; pause
+    echo -e "\n${GREEN}✅ BOT INSTALLED SUCCESSFULLY!${NC}"; pause
 }
 
 while true; do
@@ -684,7 +694,8 @@ while true; do
     echo -e " ${BLUE}[09] ⚙️ SETTINGS${NC}"
     echo -e " ${BLUE}[00] 🚪 EXIT${NC}"
     echo -e "${LINE}"
-    read -p " $(echo -e ${BLUE}SELECT: ${NC})" o
+    echo -ne " ${BLUE}SELECT: ${NC}"
+    read o
     case "$o" in
         1|01) fun_create ;; 
         2|02) fun_renew ;; 
@@ -696,6 +707,6 @@ while true; do
         8|08) fun_violations ;; 
         9|09) fun_settings ;;  
         0|00) exit 0 ;;
-        *) echo -e "${RED} INVALID OPTION!${NC}" ; sleep 1 ;;
+        *) echo -e "\n${RED} INVALID OPTION!${NC}" ; sleep 1 ;;
     esac
 done
