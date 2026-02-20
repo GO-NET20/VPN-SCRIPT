@@ -239,7 +239,7 @@ fun_renew() {
 
 fun_remove() {
     draw_header
-    echo -e "               🗑️ ${BLUE}REMOVE USER${NC}"
+    echo -e "               🗑️ ${BLUE}DELETE ACCOUNT${NC}"
     echo -e "${LINE}"
     echo -ne " ${BLUE}👤 USERNAME : ${NC}"
     read u
@@ -256,7 +256,7 @@ fun_remove() {
 
 fun_lock() {
     draw_header
-    echo -e "               🔒 ${BLUE}LOCK/UNLOCK${NC}"
+    echo -e "               🔒 ${BLUE}LOCK ACCOUNT${NC}"
     echo -e "${LINE}"
     echo -ne " ${BLUE}👤 USERNAME : ${NC}"
     read u
@@ -275,7 +275,7 @@ fun_lock() {
 fun_list() {
     clear
     echo -e "${LINE}"
-    echo -e "               📋 ${BLUE}ALL USERS${NC}"
+    echo -e "               📋 ${BLUE}LIST ACCOUNTS${NC}"
     echo -e "${LINE}"
     SHADOW_CACHE=$(cat /etc/shadow 2>/dev/null)
     while IFS='|' read -r u d t n; do
@@ -293,7 +293,7 @@ fun_list() {
 fun_monitor_view() {
     clear
     echo -e "${LINE}"
-    echo -e "               🔘 ${BLUE}LIVE MONITOR${NC}"
+    echo -e "               👁 ${BLUE}MONITOR ACCOUNT${NC}"
     echo -e "${LINE}"
     ACTIVE_PROCS=$(ps -eo user,comm 2>/dev/null | grep -E 'sshd|dropbear')
     while IFS='|' read -r u d t n; do
@@ -313,7 +313,7 @@ fun_monitor_view() {
 
 fun_backup() {
     draw_header
-    echo -e "               💾 ${BLUE}SAVE DATA${NC}"
+    echo -e "               💾 ${BLUE}BACKUP DATA${NC}"
     echo -e "${LINE}"
     cp "$USER_DB" "$BACKUP_DIR/users_backup_$(date +%F).txt"
     echo -e "${GREEN} ✅ BACKUP SAVED IN $BACKUP_DIR${NC}"
@@ -405,6 +405,7 @@ from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageH
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(message)s')
 CONF_FILE = "/etc/xpanel/bot.conf"
 DB_FILE = "/etc/xpanel/users_db.txt"
+LOG_FILE = "/var/log/kp_manager.log"
 TLINE = "============================"
 
 def load_config():
@@ -419,13 +420,11 @@ cfg = load_config(); TOKEN = cfg.get("BOT_TOKEN"); ADMIN_ID = int(cfg.get("ADMIN
 
 def get_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👤 ADD USER", callback_data='add')],
-        [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ REMOVE", callback_data='del')],
-        [InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock_menu')],
-        [InlineKeyboardButton("📋 ALL USERS", callback_data='list')],
-        [InlineKeyboardButton("🔘 MONITOR", callback_data='onl')],
-        [InlineKeyboardButton("💾 SAVE DATA", callback_data='bak')],
-        [InlineKeyboardButton("⚙️ SETTINGS", callback_data='bot_set')]
+        [InlineKeyboardButton("👤 CREATE ACCOUNT", callback_data='add'), InlineKeyboardButton("🔄 RENEW ACCOUNT", callback_data='ren')],
+        [InlineKeyboardButton("🗑 DELETE ACCOUNT", callback_data='del'), InlineKeyboardButton("🔒 LOCK ACCOUNT", callback_data='lock_menu')],
+        [InlineKeyboardButton("📋 LIST ACCOUNTS", callback_data='list'), InlineKeyboardButton("👁 MONITOR ACCOUNT", callback_data='onl')],
+        [InlineKeyboardButton("💾 BACKUP DATA", callback_data='bak'), InlineKeyboardButton("🔔 ALERTS LOG", callback_data='alerts')],
+        [InlineKeyboardButton("⚙ SETTINGS", callback_data='bot_set'), InlineKeyboardButton("🚪 EXIT", callback_data='close')]
     ])
 
 def get_settings_menu():
@@ -444,6 +443,10 @@ def start(u, c):
 
 def btn(u, c):
     q = u.callback_query; q.answer(); d = q.data
+    if d == 'close':
+        try: q.message.delete()
+        except: pass
+        return
     if d == 'back': c.user_data.clear(); q.edit_message_text(f"⚡ <b>SSH MANAGER</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
     try:
         if d == 'add':
@@ -588,6 +591,22 @@ def btn(u, c):
                         c.bot.send_message(chat_id=u.effective_chat.id, text=body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if idx == total_pages - 1 else None)
             else:
                 q.edit_message_text("No users found.", reply_markup=get_back_btn())
+                
+        elif d == 'alerts':
+            if os.path.exists(LOG_FILE):
+                try:
+                    alerts_raw = subprocess.getoutput(f"grep 'MULTI-LOGIN KICK' {LOG_FILE} | tail -n 15")
+                    if not alerts_raw.strip():
+                        msg = "✅ <b>NO VIOLATIONS DETECTED YET.</b>"
+                    else:
+                        msg = "🔔 <b>ALERTS LOG (VIOLATIONS)</b>\n\n"
+                        for l in alerts_raw.split('\n'):
+                            if l.strip(): msg += f"⚠️ {l}\n"
+                except:
+                    msg = "Error reading log."
+            else:
+                msg = "⚠️ <b>LOG FILE IS EMPTY.</b>"
+            q.edit_message_text(msg, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif d == 'bak':
             if os.path.exists(DB_FILE): c.bot.send_document(ADMIN_ID, open(DB_FILE, 'rb'))
@@ -683,18 +702,18 @@ EOF
 
 while true; do
     draw_header
-    echo -e " ${BLUE}[01] 👤 ADD ACCOUNT${NC}"
-    echo -e " ${BLUE}[02] 🔄 RENEW ACCOUNT${NC}"
-    echo -e " ${BLUE}[03] 🗑️ REMOVE ACCOUNT${NC}"
-    echo -e " ${BLUE}[04] 🔐 LOCK ACCOUNT${NC}"
-    echo -e " ${BLUE}[05] 📋 LIST ACCOUNTS${NC}"
-    echo -e " ${BLUE}[06] 🔘 MONITOR USERS${NC}"
-    echo -e " ${BLUE}[07] 💾 BACKUP DATA${NC}"
-    echo -e " ${BLUE}[08] 🔔 ALERTS LOG${NC}"
-    echo -e " ${BLUE}[09] ⚙️ SETTINGS${NC}"
-    echo -e " ${BLUE}[00] 🚪 EXIT${NC}"
+    echo -e "  ${BLUE}[01] 👤 CREATE ACCOUNT${NC}"
+    echo -e "  ${BLUE}[02] 🔄 RENEW ACCOUNT${NC}"
+    echo -e "  ${BLUE}[03] 🗑 DELETE ACCOUNT${NC}"
+    echo -e "  ${BLUE}[04] 🔒 LOCK ACCOUNT${NC}"
+    echo -e "  ${BLUE}[05] 📋 LIST ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[06] 👁 MONITOR ACCOUNT${NC}"
+    echo -e "  ${BLUE}[07] 💾 BACKUP DATA${NC}"
+    echo -e "  ${BLUE}[08] 🔔 ALERTS LOG${NC}"
+    echo -e "  ${BLUE}[09] ⚙ SETTINGS${NC}"
+    echo -e "  ${BLUE}[00] 🚪 EXIT${NC}"
     echo -e "${LINE}"
-    echo -ne " ${BLUE}SELECT: ${NC}"
+    echo -ne "        ${BLUE}SELECT: ${NC}"
     read o
     case "$o" in
         1|01) fun_create ;; 
