@@ -276,7 +276,7 @@ fun_list() {
              if echo "$SHADOW_CACHE" | grep -q "^${u}:!"; then LOCK_STAT="⛔"; else LOCK_STAT="  "; fi
              printf " ${BLUE}👤 %-12s${NC} %s ${BLUE}📅 %s${NC}\n" "$u" "$LOCK_STAT" "$DATE_STR"
         fi
-    done < "$USER_DB"
+    done < <(sort -V "$USER_DB")
     echo -e "${LINE}"
     pause
 }
@@ -297,7 +297,7 @@ fun_monitor_view() {
              fi
              printf " ${BLUE}👤 %-12s${NC}   %s\n" "$u" "$STATUS"
         fi
-    done < "$USER_DB"
+    done < <(sort -V "$USER_DB")
     echo -e "${LINE}"
     pause
 }
@@ -377,35 +377,10 @@ fun_violations() {
     pause
 }
 
-fun_bulk_create() {
-    draw_header
-    echo -e "               📦 ${BLUE}BULK CREATE${NC}"
-    echo -e "${LINE}"
-    read -p " $(echo -e ${BLUE}🔢 How many accounts? : ${NC})" count
-    if ! [[ "$count" =~ ^[0-9]+$ ]]; then echo -e "${RED} INVALID NUMBER!${NC}"; pause; return; fi
-    echo -e " ${YELLOW}Creating $count accounts... Please wait...${NC}"
-    created=0
-    i=1
-    while [ $created -lt "$count" ]; do
-        u="USER${i}"
-        if ! id "$u" &>/dev/null && ! grep -q "^$u|" "$USER_DB"; then
-            useradd -M -s /bin/false "$u" >/dev/null 2>&1
-            echo "$u:12345" | chpasswd >/dev/null 2>&1
-            echo "$u|NEVER|00:00|SSH" >> "$USER_DB"
-            ((created++))
-            echo -e " ✅ Created: ${WHITE}$u${NC} (Pass: 12345)"
-        fi
-        ((i++))
-    done
-    echo -e "${LINE}"
-    echo -e "${GREEN} ✅ $count ACCOUNTS CREATED SUCCESSFULLY!${NC}"
-    pause
-}
-
 fun_install_bot() {
     pkill -f ssh_bot.py
     systemctl stop sshbot >/dev/null 2>&1
-    clear; echo -e "${BLUE}INSTALLING BOT WITH SMART LOCK & BULK FEATURE...${NC}"
+    clear; echo -e "${BLUE}INSTALLING BOT WITH SMART LOCK...${NC}"
     pip3 install python-telegram-bot==13.7 schedule requests --break-system-packages >/dev/null 2>&1 || \
     pip3 install python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
     echo "BOT_TOKEN=\"$MY_TOKEN\"" > "$BOT_CONF"
@@ -434,7 +409,7 @@ cfg = load_config(); TOKEN = cfg.get("BOT_TOKEN"); ADMIN_ID = int(cfg.get("ADMIN
 
 def get_menu():
     return InlineKeyboardMarkup([
-        [InlineKeyboardButton("👤 ADD USER", callback_data='add'), InlineKeyboardButton("📦 BULK CREATE", callback_data='bulk')],
+        [InlineKeyboardButton("👤 ADD USER", callback_data='add')],
         [InlineKeyboardButton("🔄 RENEW", callback_data='ren'), InlineKeyboardButton("🗑️ REMOVE", callback_data='del')],
         [InlineKeyboardButton("🔒 LOCK / UNLOCK", callback_data='lock_menu')],
         [InlineKeyboardButton("📋 ALL USERS", callback_data='list')],
@@ -481,10 +456,6 @@ def btn(u, c):
             open(DB_FILE, 'a').write(f"{usr}|{dt}|{tm}|SSH\n")
             resp = (f"<b>{TLINE}</b>\n           <b>ACCOUNT</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{dt}</code>\n⏰ Time     : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
             q.edit_message_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
-            
-        elif d == 'bulk':
-            c.user_data['act'] = 'bulk_amt'
-            q.edit_message_text("📦 <b>Enter the number of accounts to create:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
 
         elif d == 'ren': 
             c.user_data['act']='r_user'
@@ -635,30 +606,7 @@ def txt(u, c):
     if u.effective_user.id != ADMIN_ID: return
     msg = u.message.text; act = c.user_data.get('act')
     try:
-        if act == 'bulk_amt':
-            if not msg.isdigit():
-                u.message.reply_text("❌ <b>Invalid Number.</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
-                return
-            count = int(msg)
-            if count > 150: count = 150
-            u.message.reply_text(f"⏳ <b>Creating {count} accounts... Please wait.</b>", parse_mode=ParseMode.HTML)
-            created = 0
-            i = 1
-            db_content = open(DB_FILE, 'r').read() if os.path.exists(DB_FILE) else ""
-            new_entries = []
-            while created < count:
-                usr = f"USER{i}"
-                if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0 and f"{usr}|" not in db_content:
-                    subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL)
-                    subprocess.run(f"echo '{usr}:12345' | chpasswd", shell=True, stdout=subprocess.DEVNULL)
-                    new_entries.append(f"{usr}|NEVER|00:00|SSH\n")
-                    created += 1
-                i += 1
-            open(DB_FILE, 'a').writelines(new_entries)
-            u.message.reply_text(f"✅ <b>Successfully created {count} accounts!</b>\nAll set to <b>NEVER</b> expiry.", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
-            c.user_data['act'] = ''
-
-        elif act == 'lu_user':
+        if act == 'lu_user':
             usr = msg
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔒 LOCK", callback_data=f"do_lock_{usr}"), InlineKeyboardButton("🔓 UNLOCK", callback_data=f"do_unlock_{usr}")],[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             u.message.reply_text(f"Select action for <b>{usr}</b>:", parse_mode=ParseMode.HTML, reply_markup=kb)
@@ -725,20 +673,18 @@ EOF
 
 while true; do
     draw_header
-    echo -e " ${BLUE}[1] 👤 ADD ACCOUNT${NC}"
-    echo -e " ${BLUE}[2] 🔄 RENEW ACCOUNT${NC}"
-    echo -e " ${BLUE}[3] 🗑️ REMOVE ACCOUNT${NC}"
-    echo -e " ${BLUE}[4] 🔐 LOCK ACCOUNT${NC}"
-    echo -e " ${BLUE}[5] 📋 LIST ACCOUNTS${NC}"
-    echo -e " ${BLUE}[6] 🔘 MONITOR USERS${NC}"
-    echo -e " ${BLUE}[7] 💾 BACKUP DATA${NC}"
-    echo -e " ${BLUE}[8] 🔔 ALERTS LOG${NC}"
-    echo -e " ${BLUE}[9] ⚙️ SETTINGS${NC}"
-    echo -e " ${BLUE}[10] 📦 BULK CREATE${NC}"
-    echo -e " ${BLUE}[0] 🚪 EXIT${NC}"
+    echo -e " ${BLUE}[01] 👤 ADD ACCOUNT${NC}"
+    echo -e " ${BLUE}[02] 🔄 RENEW ACCOUNT${NC}"
+    echo -e " ${BLUE}[03] 🗑️ REMOVE ACCOUNT${NC}"
+    echo -e " ${BLUE}[04] 🔐 LOCK ACCOUNT${NC}"
+    echo -e " ${BLUE}[05] 📋 LIST ACCOUNTS${NC}"
+    echo -e " ${BLUE}[06] 🔘 MONITOR USERS${NC}"
+    echo -e " ${BLUE}[07] 💾 BACKUP DATA${NC}"
+    echo -e " ${BLUE}[08] 🔔 ALERTS LOG${NC}"
+    echo -e " ${BLUE}[09] ⚙️ SETTINGS${NC}"
+    echo -e " ${BLUE}[00] 🚪 EXIT${NC}"
     echo -e "${LINE}"
     echo -e " ${BLUE}SELECT:${NC}"
-    echo -e "${LINE}"
     read o
     case "$o" in
         1|01) fun_create ;; 
@@ -749,8 +695,7 @@ while true; do
         6|06) fun_monitor_view ;; 
         7|07) fun_backup ;; 
         8|08) fun_violations ;; 
-        9|09) fun_settings ;; 
-        10) fun_bulk_create ;; 
+        9|09) fun_settings ;;  
         0|00) exit 0 ;;
         *) echo -e "${RED} INVALID OPTION!${NC}" ; sleep 1 ;;
     esac
