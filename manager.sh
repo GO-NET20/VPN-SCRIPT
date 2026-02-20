@@ -175,12 +175,10 @@ fun_create() {
     echo -e " ${BLUE}👤 USERNAME :${NC} ${WHITE}$u${NC}"
     echo -e " ${BLUE}🔑 PASSWORD :${NC} ${WHITE}$p${NC}"
     
-    echo -e " ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC}"
-    read exp_choice
+    read -p " $(echo -e ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC})" exp_choice
     
     if [[ "${exp_choice,,}" == "y" ]]; then
-        echo -e " ${BLUE}📅 Enter Date and Time : ${NC}"
-        read dt_input
+        read -p " $(echo -e ${BLUE}📅 Enter Date and Time : ${NC})" dt_input
         d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
         t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}' | head -1)
         [[ -z "$d" ]] && d="NEVER"
@@ -213,15 +211,12 @@ fun_renew() {
     draw_header
     echo -e "               🔄 ${BLUE}RENEW ACCOUNT${NC}"
     echo -e "${LINE}"
-    echo -e " ${BLUE}👤 USERNAME : ${NC}"
-    read u
+    read -p " $(echo -e ${BLUE}👤 USERNAME : ${NC})" u
     if ! grep -q "^$u|" "$USER_DB"; then echo -e "${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
     
-    echo -e " ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC}"
-    read exp_choice
+    read -p " $(echo -e ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC})" exp_choice
     if [[ "${exp_choice,,}" == "y" ]]; then
-        echo -e " ${BLUE}📅 Enter New Date and Time : ${NC}"
-        read dt_input
+        read -p " $(echo -e ${BLUE}📅 Enter New Date and Time : ${NC})" dt_input
         d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
         t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}' | head -1)
         [[ -z "$d" ]] && d="NEVER"
@@ -241,10 +236,8 @@ fun_remove() {
     draw_header
     echo -e "               🗑️ ${BLUE}REMOVE USER${NC}"
     echo -e "${LINE}"
-    echo -e " ${BLUE}👤 USERNAME : ${NC}"
-    read u
-    echo -e " ${BLUE}⚠️ CONFIRM? [Y/N]: ${NC}"
-    read c
+    read -p " $(echo -e ${BLUE}👤 USERNAME : ${NC})" u
+    read -p " $(echo -e ${BLUE}⚠️ CONFIRM? [Y/N]: ${NC})" c
     if [[ "${c,,}" == "y" ]]; then
         pkill -KILL -u "$u" >/dev/null 2>&1
         userdel -f "$u" >/dev/null 2>&1
@@ -258,12 +251,10 @@ fun_lock() {
     draw_header
     echo -e "               🔒 ${BLUE}LOCK/UNLOCK${NC}"
     echo -e "${LINE}"
-    echo -e " ${BLUE}👤 USERNAME : ${NC}"
-    read u
+    read -p " $(echo -e ${BLUE}👤 USERNAME : ${NC})" u
     echo -e " ${BLUE}[1] LOCK ⛔${NC}"
     echo -e " ${BLUE}[2] UNLOCK 🔓${NC}"
-    echo -e " ${BLUE}SELECT: ${NC}"
-    read s
+    read -p " $(echo -e ${BLUE}SELECT: ${NC})" s
     if [[ "$s" == "1" ]]; then
         usermod -L "$u" >/dev/null 2>&1; pkill -KILL -u "$u" >/dev/null 2>&1; echo -e "${GREEN} ⛔ LOCKED${NC}"
     else
@@ -352,8 +343,7 @@ fun_settings() {
         echo -e " ${BLUE}[4] 📥 RESTORE USERS${NC}"
         echo -e " ${BLUE}[5] 🔙 BACK${NC}"
         echo -e "${LINE}"
-        echo -e " ${BLUE}SELECT: ${NC}"
-        read s
+        read -p " $(echo -e ${BLUE}SELECT: ${NC})" s
         case "$s" in
             1) fun_install_bot ;;
             2) timedatectl set-timezone Africa/Tunis; echo -e "${GREEN} ✅ TIMEZONE SET TO TUNIS${NC}"; pause ;;
@@ -694,8 +684,7 @@ while true; do
     echo -e " ${BLUE}[09] ⚙️ SETTINGS${NC}"
     echo -e " ${BLUE}[00] 🚪 EXIT${NC}"
     echo -e "${LINE}"
-    echo -e "${BLUE} SELECT:${NC}"
-    read o
+    read -p " $(echo -e ${BLUE}SELECT: ${NC})" o
     case "$o" in
         1|01) fun_create ;; 
         2|02) fun_renew ;; 
