@@ -158,28 +158,39 @@ pause() { echo -e "\n${BLUE}PRESS [ENTER] TO RETURN...${NC}"; read; }
 draw_header() {
     clear
     echo -e "${LINE}"
-    echo -e "               ⚡ ${BLUE}SSH MANAGER${NC} ⚡"
+    echo -e "             ⚡ ${BLUE}SSH MANAGER V 10${NC} ⚡"
     echo -e "${LINE}"
 }
 
 fun_create() {
     draw_header
-    i=1
-    while true; do
-        u="USER${i}"
-        if id "$u" &>/dev/null; then ((i++)); continue; fi
-        if grep -q "^$u|" "$USER_DB"; then ((i++)); continue; fi
-        break
-    done
-    p="12345"
-    echo -e " ${BLUE}👤 USERNAME :${NC} ${WHITE}$u${NC}"
-    echo -e " ${BLUE}🔑 PASSWORD :${NC} ${WHITE}$p${NC}"
+    
+    echo -ne " ${BLUE}👤 Enter Username : ${NC}"
+    read u
+    
+    if [[ -z "$u" ]]; then
+        echo -e "\n${RED} ❌ Username cannot be empty!${NC}"
+        pause; return
+    fi
+
+    if id "$u" &>/dev/null || grep -q "^$u|" "$USER_DB"; then
+        echo -e "\n${RED} ❌ USER ALREADY EXISTS!${NC}"
+        pause; return
+    fi
+
+    echo -ne " ${BLUE}🔑 Enter Password : ${NC}"
+    read p
+    
+    if [[ -z "$p" ]]; then
+        echo -e "\n${RED} ❌ Password cannot be empty!${NC}"
+        pause; return
+    fi
     
     echo -ne " ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC}"
     read exp_choice
     
     if [[ "${exp_choice,,}" == "y" ]]; then
-        echo -ne " ${BLUE}📅 Enter Date and Time : ${NC}"
+        echo -ne " ${BLUE}📅 Enter Date and Time (YYYY-MM-DD HH:MM) : ${NC}"
         read dt_input
         d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
         t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}' | head -1)
@@ -195,7 +206,7 @@ fun_create() {
     echo "$u|$d|$t|SSH" >> "$USER_DB"
     clear
     echo -e "${LINE}"
-    echo -e "                    ${WHITE}ACCOUNT${NC} "
+    echo -e "                 ${WHITE}ACCOUNT CREATED${NC} "
     echo -e "${LINE}"
     echo -e ""
     echo -e " ${BLUE}👤 Username :${NC} ${WHITE}$u${NC}"
@@ -439,7 +450,7 @@ def get_back_btn():
     return InlineKeyboardMarkup([[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
 
 def start(u, c):
-    if u.effective_user.id == ADMIN_ID: u.message.reply_text(f"⚡ <b>SSH MANAGER</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+    if u.effective_user.id == ADMIN_ID: u.message.reply_text(f"⚡ <b>SSH MANAGER V 10</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
 def btn(u, c):
     q = u.callback_query; q.answer(); d = q.data
@@ -447,28 +458,23 @@ def btn(u, c):
         try: q.message.delete()
         except: pass
         return
-    if d == 'back': c.user_data.clear(); q.edit_message_text(f"⚡ <b>SSH MANAGER</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
+    if d == 'back': c.user_data.clear(); q.edit_message_text(f"⚡ <b>SSH MANAGER V 10</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu()); return
     try:
         if d == 'add':
-            i = 1
-            while True:
-                usr = f"USER{i}"
-                if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0: break
-                i += 1
-            c.user_data['u'] = usr
-            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES", callback_data='add_yes'), InlineKeyboardButton("🔴 NO", callback_data='add_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
-            q.edit_message_text(f"👤 Username: <code>{usr}</code>\n\n⏳ <b>Set Expiry Date?</b>", parse_mode=ParseMode.HTML, reply_markup=kb)
+            c.user_data['act'] = 'add_u'
+            q.edit_message_text("👤 <b>Send the New Username in chat:</b>\n(أرسل اسم المستخدم في الدردشة)", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             
         elif d == 'add_yes':
             c.user_data['act'] = 'a_datetime'
-            q.edit_message_text(f"👤 Username : <code>{c.user_data['u']}</code>\n🔑 Password  : <code>12345</code>\n\n📅 <b>Enter Date and Time :</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            q.edit_message_text(f"👤 Username : <code>{c.user_data['u']}</code>\n🔑 Password  : <code>{c.user_data['p']}</code>\n\n📅 <b>Enter Date and Time (YYYY-MM-DD HH:MM) :</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             
         elif d == 'add_no':
-            usr = c.user_data['u']; pwd = "12345"; dt = "NEVER"; tm = "00:00"
+            usr = c.user_data['u']; pwd = c.user_data['p']; dt = "NEVER"; tm = "00:00"
             subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL); subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL)
             open(DB_FILE, 'a').write(f"{usr}|{dt}|{tm}|SSH\n")
-            resp = (f"<b>{TLINE}</b>\n           <b>ACCOUNT</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{dt}</code>\n⏰ Time     : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
+            resp = (f"<b>{TLINE}</b>\n           <b>ACCOUNT CREATED</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{dt}</code>\n⏰ Time     : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
             q.edit_message_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            c.user_data.clear()
 
         elif d == 'ren': 
             c.user_data['act']='r_user'
@@ -635,26 +641,42 @@ def txt(u, c):
     if u.effective_user.id != ADMIN_ID: return
     msg = u.message.text; act = c.user_data.get('act')
     try:
-        if act == 'lu_user':
-            usr = msg
+        if act == 'add_u':
+            usr = msg.strip()
+            if subprocess.run(f"id {usr}", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0 or (os.path.exists(DB_FILE) and f"{usr}|" in open(DB_FILE).read()):
+                u.message.reply_text("❌ <b>User already exists!</b> Try another username:", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            else:
+                c.user_data['u'] = usr
+                c.user_data['act'] = 'add_p'
+                u.message.reply_text(f"👤 Username: <code>{usr}</code>\n\n🔑 <b>Send the Password for this user:</b>\n(أرسل الباسورد الآن)", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+                
+        elif act == 'add_p':
+            c.user_data['p'] = msg.strip()
+            kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES", callback_data='add_yes'), InlineKeyboardButton("🔴 NO", callback_data='add_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
+            u.message.reply_text(f"👤 Username: <code>{c.user_data['u']}</code>\n🔑 Password: <code>{c.user_data['p']}</code>\n\n⏳ <b>Set Expiry Date?</b>", parse_mode=ParseMode.HTML, reply_markup=kb)
+            c.user_data['act'] = ''
+
+        elif act == 'lu_user':
+            usr = msg.strip()
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔒 LOCK", callback_data=f"do_lock_{usr}"), InlineKeyboardButton("🔓 UNLOCK", callback_data=f"do_unlock_{usr}")],[InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             u.message.reply_text(f"Select action for <b>{usr}</b>:", parse_mode=ParseMode.HTML, reply_markup=kb)
             c.user_data['act'] = ''
         
         elif act == 'r_user':
-            c.user_data['ru'] = msg
+            c.user_data['ru'] = msg.strip()
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES", callback_data='ren_yes'), InlineKeyboardButton("🔴 NO", callback_data='ren_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             u.message.reply_text(f"⏳ <b>Set Expiry Date for {msg}?</b>", parse_mode=ParseMode.HTML, reply_markup=kb)
             c.user_data['act'] = ''
 
         elif act == 'a_datetime':
-            usr = c.user_data['u']; pwd = "12345"
+            usr = c.user_data['u']; pwd = c.user_data['p']
             dm = re.search(r'\d{4}-\d{2}-\d{2}', msg); tm = re.search(r'\d{2}:\d{2}', msg)
             d = dm.group(0) if dm else "NEVER"; t = tm.group(0) if tm else "00:00"
             subprocess.run(f"useradd -M -s /bin/false {usr}", shell=True, stdout=subprocess.DEVNULL); subprocess.run(f"echo '{usr}:{pwd}' | chpasswd", shell=True, stdout=subprocess.DEVNULL)
             open(DB_FILE, 'a').write(f"{usr}|{d}|{t}|SSH\n")
-            resp = (f"<b>{TLINE}</b>\n           <b>ACCOUNT</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{d}</code>\n⏰ Time     : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
+            resp = (f"<b>{TLINE}</b>\n           <b>ACCOUNT CREATED</b>          \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{d}</code>\n⏰ Time     : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>")
             u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+            c.user_data.clear()
             
         elif act == 'r_val':
             usr = c.user_data.get('ru'); dm = re.search(r'\d{4}-\d{2}-\d{2}', msg); tm = re.search(r'\d{2}:\d{2}', msg)
@@ -666,7 +688,7 @@ def txt(u, c):
             u.message.reply_text(f"✅ <b>RENEWED & UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             
         elif act == 'd1':
-            usr_to_del = msg
+            usr_to_del = msg.strip()
             c.user_data['del_u'] = usr_to_del
             kb = InlineKeyboardMarkup([
                 [InlineKeyboardButton("🟢 YES", callback_data='del_yes'), InlineKeyboardButton("🔴 NO", callback_data='del_no')],
@@ -725,7 +747,7 @@ while true; do
         7|07) fun_backup ;; 
         8|08) fun_violations ;; 
         9|09) fun_settings ;;  
-        0|00) exit 0 ;;
+        0|00) clear; exit 0 ;;
         *) echo -e "\n${RED} INVALID OPTION!${NC}" ; sleep 1 ;;
     esac
 done
