@@ -186,11 +186,11 @@ fun_create() {
         pause; return
     fi
     
-    echo -ne " ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC}"
+    echo -ne " ${BLUE}⏳ Set Expiry Date? [Y/N] : ${NC}"
     read exp_choice
     
     if [[ "${exp_choice,,}" == "y" ]]; then
-        echo -ne " ${BLUE}📅 Enter Date and Time (YYYY-MM-DD HH:MM) : ${NC}"
+        echo -ne " ${BLUE}📅 Enter Date and Time : ${NC}"
         read dt_input
         d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
         t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}' | head -1)
@@ -228,7 +228,7 @@ fun_renew() {
     read u
     if ! grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
     
-    echo -ne " ${BLUE}⏳ Set Expiry Date? [Y/N] 🔴🟢 : ${NC}"
+    echo -ne " ${BLUE}⏳ Set Expiry Date? [Y/N] : ${NC}"
     read exp_choice
     if [[ "${exp_choice,,}" == "y" ]]; then
         echo -ne " ${BLUE}📅 Enter New Date and Time : ${NC}"
@@ -725,15 +725,15 @@ EOF
 while true; do
     draw_header
     echo -e "  ${BLUE}[01] 👤 CREATE ACCOUNT${NC}"
-    echo -e "  ${BLUE}[02] 🔄  RENEW ACCOUNT${NC}"
-    echo -e "  ${BLUE}[03] 🗑  DELETE ACCOUNT${NC}"
-    echo -e "  ${BLUE}[04] 🔒 LOCK ACCOUNT${NC}"
+    echo -e "  ${BLUE}[02] 🔄 RENEW ACCOUNT${NC}"
+    echo -e "  ${BLUE}[03] 🗑 DELETE ACCOUNT${NC}"
+    echo -e "  ${BLUE}[04] ⛔ LOCK ACCOUNT${NC}"
     echo -e "  ${BLUE}[05] 📋 LIST ACCOUNTS${NC}"
-    echo -e "  ${BLUE}[06] 👁  MONITOR ACCOUNT${NC}"
+    echo -e "  ${BLUE}[06] 👁 MONITOR ACCOUNT${NC}"
     echo -e "  ${BLUE}[07] 💾 BACKUP DATA${NC}"
     echo -e "  ${BLUE}[08] 🔔 ALERTS LOG${NC}"
-    echo -e "  ${BLUE}[09] ⚙  SETTINGS${NC}  "
-    echo -e "  ${BLUE}[00] 🚪 EXIT${NC}"
+    echo -e "  ${BLUE}[09] ⚙️ SETTINGS${NC}  "
+    echo -e "  ${BLUE}[00] ↪️ EXIT${NC}"
     echo -e "${LINE}"
     echo -ne "  ${BLUE}SELECT:${NC} "
     read o
