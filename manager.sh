@@ -33,14 +33,21 @@ mkdir -p /etc/xpanel "$BACKUP_DIR"
 touch "$USER_DB" "$LOG_FILE"
 [[ ! -f "$BOT_CONF" ]] && touch "$BOT_CONF"
 
+# التأكد من تثبيت بايثون و PIP للبوت
 if ! command -v python3 &> /dev/null; then
     $CMD python3 > /dev/null 2>&1
+fi
+if ! command -v pip3 &> /dev/null; then
+    $CMD python3-pip > /dev/null 2>&1
 fi
 
 is_number() {
     [[ $1 =~ ^[0-9]+$ ]]
 }
 
+# =============================================
+# AUTO-KILL & EXPIRY MONITOR (PYTHON)
+# =============================================
 cat > "$MONITOR_SCRIPT" << 'EOF'
 #!/usr/bin/env python3
 import datetime, subprocess, os, time
@@ -163,33 +170,22 @@ draw_header() {
     echo -e "${LINE}"
 }
 
+# =============================================
+# BASH MENU FUNCTIONS
+# =============================================
 fun_create() {
     draw_header
-    
     echo -ne " ${BLUE}👤 Enter Username : ${NC}"
     read u
-    
-    if [[ -z "$u" ]]; then
-        echo -e "\n${RED} ❌ Username cannot be empty!${NC}"
-        pause; return
-    fi
-
-    if id "$u" &>/dev/null || grep -q "^$u|" "$USER_DB"; then
-        echo -e "\n${RED} ❌ USER ALREADY EXISTS!${NC}"
-        pause; return
-    fi
+    if [[ -z "$u" ]]; then echo -e "\n${RED} ❌ Username cannot be empty!${NC}"; pause; return; fi
+    if id "$u" &>/dev/null || grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ USER ALREADY EXISTS!${NC}"; pause; return; fi
 
     echo -ne " ${BLUE}🔑 Enter Password : ${NC}"
     read p
-    
-    if [[ -z "$p" ]]; then
-        echo -e "\n${RED} ❌ Password cannot be empty!${NC}"
-        pause; return
-    fi
+    if [[ -z "$p" ]]; then echo -e "\n${RED} ❌ Password cannot be empty!${NC}"; pause; return; fi
     
     echo -ne " ${BLUE}⏳ Set Expiry Date? [Y/N] : ${NC}"
     read exp_choice
-    
     if [[ "${exp_choice,,}" == "y" ]]; then
         echo -ne " ${BLUE}📅 Enter Date and Time (YYYY-MM-DD HH:MM) : ${NC}"
         read dt_input
@@ -206,25 +202,16 @@ fun_create() {
     echo "$u:$p" | chpasswd >/dev/null 2>&1
     echo "$u|$d|$t|SSH" >> "$USER_DB"
     clear
-    echo -e "${LINE}"
-    echo -e "                 ${WHITE}ACCOUNT CREATED${NC} "
-    echo -e "${LINE}"
-    echo -e ""
-    echo -e " ${BLUE}👤 Username :${NC} ${WHITE}$u${NC}"
-    echo -e " ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
-    echo -e " ${BLUE}📅 Expiry   :${NC} ${WHITE}$d${NC}"
-    echo -e " ${BLUE}⏰ Time     :${NC} ${WHITE}$t${NC}"
-    echo -e ""
-    echo -e "${LINE}"
-    echo -e " ${BLUE}📋 Copy     :${NC} ${WHITE}$u:$p${NC}"
-    echo -e "${LINE}"
+    echo -e "${LINE}\n                 ${WHITE}ACCOUNT CREATED${NC}\n${LINE}\n"
+    echo -e " ${BLUE}👤 Username :${NC} ${WHITE}$u${NC}\n ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
+    echo -e " ${BLUE}📅 Expiry   :${NC} ${WHITE}$d${NC}\n ${BLUE}⏰ Time     :${NC} ${WHITE}$t${NC}\n\n${LINE}"
+    echo -e " ${BLUE}📋 Copy     :${NC} ${WHITE}$u:$p${NC}\n${LINE}"
     pause
 }
 
 fun_renew() {
     draw_header
-    echo -e "               🔄 ${BLUE}RENEW ACCOUNT${NC}"
-    echo -e "${LINE}"
+    echo -e "               🔄 ${BLUE}RENEW ACCOUNT${NC}\n${LINE}"
     echo -ne " ${BLUE}👤 USERNAME : ${NC}"
     read u
     if ! grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
@@ -236,11 +223,9 @@ fun_renew() {
         read dt_input
         d=$(echo "$dt_input" | grep -oE '[0-9]{4}-[0-9]{2}-[0-9]{2}' | head -1)
         t=$(echo "$dt_input" | grep -oE '[0-9]{2}:[0-9]{2}' | head -1)
-        [[ -z "$d" ]] && d="NEVER"
-        [[ -z "$t" ]] && t="23:59"
+        [[ -z "$d" ]] && d="NEVER"; [[ -z "$t" ]] && t="23:59"
     else
-        d="NEVER"
-        t="00:00"
+        d="NEVER"; t="00:00"
     fi
     
     sed -i "/^$u|/d" "$USER_DB"
@@ -251,8 +236,7 @@ fun_renew() {
 
 fun_remove() {
     draw_header
-    echo -e "               🗑️ ${BLUE}DELETE ACCOUNT${NC}"
-    echo -e "${LINE}"
+    echo -e "               🗑️ ${BLUE}DELETE ACCOUNT${NC}\n${LINE}"
     echo -ne " ${BLUE}👤 USERNAME : ${NC}"
     read u
     echo -ne " ${BLUE}⚠️ CONFIRM? [Y/N]: ${NC}"
@@ -268,12 +252,10 @@ fun_remove() {
 
 fun_lock() {
     draw_header
-    echo -e "               🔒 ${BLUE}LOCK ACCOUNT${NC}"
-    echo -e "${LINE}"
+    echo -e "               🔒 ${BLUE}LOCK ACCOUNT${NC}\n${LINE}"
     echo -ne " ${BLUE}👤 USERNAME : ${NC}"
     read u
-    echo -e " ${BLUE}[1] LOCK ⛔${NC}"
-    echo -e " ${BLUE}[2] UNLOCK 🔓${NC}"
+    echo -e " ${BLUE}[1] LOCK ⛔${NC}\n ${BLUE}[2] UNLOCK 🔓${NC}"
     echo -ne " ${BLUE}SELECT: ${NC}"
     read s
     if [[ "$s" == "1" ]]; then
@@ -286,9 +268,7 @@ fun_lock() {
 
 fun_list() {
     clear
-    echo -e "${LINE}"
-    echo -e "               📋 ${BLUE}LIST ACCOUNTS${NC}"
-    echo -e "${LINE}"
+    echo -e "${LINE}\n               📋 ${BLUE}LIST ACCOUNTS${NC}\n${LINE}"
     SHADOW_CACHE=$(cat /etc/shadow 2>/dev/null)
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
@@ -297,16 +277,14 @@ fun_list() {
              if echo "$SHADOW_CACHE" | grep -q "^${u}:!"; then LOCK_STAT="⛔"; else LOCK_STAT="  "; fi
              printf " ${BLUE}👤 %-12s${NC} %s ${BLUE}📅 %s${NC}\n" "$u" "$LOCK_STAT" "$DATE_STR"
         fi
-    done < <(sort -V "$USER_DB")
+    done < "$USER_DB" # 👈 تم إزالة الفرز (sort) لعرض الترتيب الأصلي
     echo -e "${LINE}"
     pause
 }
 
 fun_monitor_view() {
     clear
-    echo -e "${LINE}"
-    echo -e "               👁 ${BLUE}MONITOR ACCOUNT${NC}"
-    echo -e "${LINE}"
+    echo -e "${LINE}\n               👁 ${BLUE}MONITOR ACCOUNT${NC}\n${LINE}"
     ACTIVE_PROCS=$(ps -eo user,comm 2>/dev/null | grep -E 'sshd|dropbear')
     while IFS='|' read -r u d t n; do
         [[ -z "$u" ]] && continue
@@ -318,18 +296,16 @@ fun_monitor_view() {
              fi
              printf " ${BLUE}👤 %-12s${NC}   %s\n" "$u" "$STATUS"
         fi
-    done < <(sort -V "$USER_DB")
+    done < "$USER_DB" # 👈 تم إزالة الفرز هنا أيضاً
     echo -e "${LINE}"
     pause
 }
 
 fun_backup() {
     draw_header
-    echo -e "               💾 ${BLUE}BACKUP DATA${NC}"
-    echo -e "${LINE}"
+    echo -e "               💾 ${BLUE}BACKUP DATA${NC}\n${LINE}"
     cp "$USER_DB" "$BACKUP_DIR/users_backup_$(date +%F).txt"
-    echo -e "${GREEN} ✅ BACKUP SAVED IN $BACKUP_DIR${NC}"
-    pause
+    echo -e "${GREEN} ✅ BACKUP SAVED IN $BACKUP_DIR${NC}"; pause
 }
 
 fun_export_users() {
@@ -355,53 +331,45 @@ fun_import_users() {
 
 fun_violations() {
     clear
-    echo -e "${LINE}"
-    echo -e "         🔔 ${BLUE}ALERTS LOG (VIOLATIONS)${NC}"
-    echo -e "${LINE}"
-    echo -e ""
+    echo -e "${LINE}\n         🔔 ${BLUE}ALERTS LOG (VIOLATIONS)${NC}\n${LINE}\n"
     if [ -f "$LOG_FILE" ]; then
         ALERTS=$(grep "MULTI-LOGIN KICK" "$LOG_FILE" | tail -n 15)
-        if [[ -z "$ALERTS" ]]; then
-            echo -e " ${GREEN}✅ NO VIOLATIONS DETECTED YET.${NC}"
+        if [[ -z "$ALERTS" ]]; then echo -e " ${GREEN}✅ NO VIOLATIONS DETECTED YET.${NC}"
         else
-            while read -r line; do
-                echo -e " ${RED}⚠️  $line${NC}"
-            done <<< "$ALERTS"
+            while read -r line; do echo -e " ${RED}⚠️  $line${NC}"; done <<< "$ALERTS"
         fi
     else
         echo -e " ${YELLOW}LOG FILE IS EMPTY.${NC}"
     fi
-    echo -e ""
-    echo -e "${LINE}"
-    pause
+    echo -e "\n${LINE}"; pause
 }
 
 # =============================================
-# TELEGRAM BOT INSTALLER
+# TELEGRAM BOT INSTALLER (FIXED DEPENDENCIES)
 # =============================================
-
 fun_install_bot() {
     clear; echo -e "${BLUE}INSTALLING BOT WITH SMART LOCK...${NC}"
     
     echo -ne " ${BLUE}🤖 Enter your Telegram Bot Token: ${NC}"
-    read input_token
+    read -r input_token
     if [[ -z "$input_token" ]]; then
-        echo -e "${RED}❌ Token cannot be empty! Installation aborted.${NC}"
-        pause; return
+        echo -e "${RED}❌ Token cannot be empty! Installation aborted.${NC}"; pause; return
     fi
     
     echo -ne " ${BLUE}👤 Enter your Telegram Admin ID: ${NC}"
-    read input_id
+    read -r input_id
     if [[ -z "$input_id" ]]; then
-        echo -e "${RED}❌ Admin ID cannot be empty! Installation aborted.${NC}"
-        pause; return
+        echo -e "${RED}❌ Admin ID cannot be empty! Installation aborted.${NC}"; pause; return
     fi
 
-    pkill -f ssh_bot.py
+    # إيقاف أي عمليات قديمة للبوت
+    pkill -f ssh_bot.py 2>/dev/null
     systemctl stop sshbot >/dev/null 2>&1
     
-    pip3 install python-telegram-bot==13.7 schedule requests --break-system-packages >/dev/null 2>&1 || \
-    pip3 install python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
+    echo -e "${YELLOW}⚙️ Installing Python dependencies (this may take a minute)...${NC}"
+    # تثبيت المكتبات مع تجاوز المشاكل الخاصة بأنظمة لينكس الحديثة
+    pip3 install urllib3==1.26.15 python-telegram-bot==13.7 schedule requests --break-system-packages >/dev/null 2>&1 || \
+    pip3 install urllib3==1.26.15 python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
     
     echo "BOT_TOKEN=\"$input_token\"" > "$BOT_CONF"
     echo "ADMIN_ID=\"$input_id\"" >> "$BOT_CONF"
@@ -709,9 +677,10 @@ if __name__ == '__main__': main()
 EOF
     cat > /etc/systemd/system/sshbot.service << 'EOF'
 [Unit]
-Description=SSH Bot Service
+Description=SSH Telegram Bot Service
 After=network.target
 [Service]
+Type=simple
 ExecStart=/usr/bin/python3 /root/ssh_bot.py
 Restart=always
 RestartSec=5
@@ -719,24 +688,25 @@ RestartSec=5
 WantedBy=multi-user.target
 EOF
     systemctl daemon-reload; systemctl enable sshbot >/dev/null 2>&1; systemctl restart sshbot
-    echo -e "\n${GREEN}✅ BOT INSTALLED SUCCESSFULLY!${NC}"; pause
+    
+    # رسالة للتحقق
+    echo -e "\n${GREEN}✅ BOT INSTALLED!${NC}"
+    echo -e "${YELLOW}👉 Go to your Telegram Bot and send /start${NC}"
+    pause
 }
 
 # =============================================
-# SETTINGS MENU (UPDATED & CLEANED)
+# SETTINGS MENU (CLEANED)
 # =============================================
-
 fun_settings() {
     while true; do
         draw_header
-        echo -e "            ⚙️ ${BLUE}SETTINGS & TOOLS${NC}"
-        echo -e "${LINE}"
+        echo -e "            ⚙️ ${BLUE}SETTINGS & TOOLS${NC}\n${LINE}"
         echo -e "  ${BLUE}[1] 🛠️ INSTALL TELEGRAM BOT${NC}"
         echo -e "  ${BLUE}[2] 🌍 SET TIMEZONE${NC}"
         echo -e "  ${BLUE}[3] 📤 EXPORT USERS${NC}"
         echo -e "  ${BLUE}[4] 📥 RESTORE USERS${NC}"
-        echo -e "  ${BLUE}[0] 🔙 BACK${NC}"
-        echo -e "${LINE}"
+        echo -e "  ${BLUE}[0] 🔙 BACK${NC}\n${LINE}"
         echo -ne "  ${BLUE}SELECT: ${NC}"
         read s
         case "$s" in
@@ -753,7 +723,6 @@ fun_settings() {
 # =============================================
 # MAIN MENU
 # =============================================
-
 while true; do
     draw_header
     echo -e "  ${BLUE}[01] 👤 CREATE ACCOUNT${NC}"
@@ -765,8 +734,7 @@ while true; do
     echo -e "  ${BLUE}[07] 💾 BACKUP DATA${NC}"
     echo -e "  ${BLUE}[08] 🔔 ALERTS LOG${NC}"
     echo -e "  ${BLUE}[09] ⚙️ SETTINGS${NC}  "
-    echo -e "  ${BLUE}[00] ↪️ EXIT${NC}"
-    echo -e "${LINE}"
+    echo -e "  ${BLUE}[00] ↪️ EXIT${NC}\n${LINE}"
     echo -ne "  ${BLUE}SELECT:${NC} "
     read o
     case "$o" in
