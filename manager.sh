@@ -848,10 +848,10 @@ fun_search() {
 fun_monitor_view() {
     draw_header
     echo -e "         👁 ${BLUE}LIVE SSH & TROJAN MONITOR${NC}\n${LINE}"
-    echo -e "  ${BLUE}[1] 🛡️ LIVE SSH ACCOUNTS${NC}"
-    echo -e "  ${BLUE}[2] ⚡ LIVE TROJAN ACCOUNTS${NC}"
-    echo -e "  ${BLUE}[3] 🌐 LIVE ALL (SSH & TROJAN)${NC}"
-    echo -e "  ${BLUE}[0] 🔙 BACK${NC}\n${LINE}"
+    echo -e "  ${BLUE}[1] LIVE SSH ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[2] LIVE TROJAN ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[3] LIVE SSH • TROJAN ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[0] BACK${NC}\n${LINE}"
     echo -ne "  ${BLUE}SELECT: ${NC}"
     read m_choice
 
@@ -863,7 +863,7 @@ fun_monitor_view() {
     echo -e "${LINE}\n   ${BLUE}======= 👁 LIVE MONITOR =======${NC}\n${LINE}"
 
     if [[ "$m_choice" == "1" || "$m_choice" == "3" ]]; then
-        echo -e " ${CYAN}🛡️ [SSH ACCOUNTS]${NC}"
+        echo -e " ${CYAN} [  SSH ACCOUNTS  ]${NC}"
         ACTIVE_USERS_DATA=$(ps -axo user:32,comm 2>/dev/null | grep -E 'sshd|dropbear' | awk '{print $1}' | sort | uniq -c)
         while IFS='|' read -r u d t rest; do
             [[ -z "$u" ]] && continue
@@ -881,7 +881,7 @@ fun_monitor_view() {
     fi
 
     if [[ "$m_choice" == "2" || "$m_choice" == "3" ]]; then
-        echo -e " ${YELLOW}⚡ [TROJAN ACCOUNTS]${NC}"
+        echo -e " ${YELLOW} [  TROJAN ACCOUNTS  ]${NC}"
         TROJAN_COUNTS_JSON=$(get_trojan_online_counts)
 
         while IFS='|' read -r p d t st rest; do
@@ -1570,8 +1570,8 @@ fun_settings() {
         echo -e "            ⚙️ ${BLUE}SETTINGS & TOOLS${NC}\n${LINE}"
         echo -e "  ${BLUE}[1] 🛠️ INSTALL TELEGRAM BOT${NC}"
         echo -e "  ${BLUE}[2] 🌍 SET TIMEZONE${NC}"
-        echo -e "  ${BLUE}[3] 📤 EXPORT USERS (SSH & TROJAN)${NC}"
-        echo -e "  ${BLUE}[4] 📥 RESTORE USERS (SSH & TROJAN)${NC}"
+        echo -e "  ${BLUE}[3] 📤 EXPORT USERS SSH • TROJAN)${NC}"
+        echo -e "  ${BLUE}[4] 📥 RESTORE USERS SSH • TROJAN)${NC}"
         echo -e "  ${BLUE}[0] 🔙 BACK${NC}\n${LINE}"
         echo -ne "  ${BLUE}SELECT: ${NC}"
         read s
@@ -1926,7 +1926,7 @@ while true; do
     echo -e "  ${BLUE}[08] 💾 BACKUP DATA${NC}"
     echo -e "  ${BLUE}[09] 🔔 EXPIRED ACCOUNTS${NC}"
     echo -e "  ${BLUE}[10] ⚙️ SETTINGS & BOT${NC}"
-    echo -e "  ${BLUE}[11] 🚀 SSH WS & TROJAN WS${NC}"
+    echo -e "  ${BLUE}[11] 🛜 SSH WS & TROJAN WS${NC}"
     echo -e "  ${BLUE}[00] ↪️ EXIT${NC}\n${LINE}"
     echo -ne "  ${BLUE}SELECT:${NC} "
     read o
