@@ -1570,8 +1570,8 @@ fun_settings() {
         echo -e "            ⚙️ ${BLUE}SETTINGS & TOOLS${NC}\n${LINE}"
         echo -e "  ${BLUE}[1] 🛠️ INSTALL TELEGRAM BOT${NC}"
         echo -e "  ${BLUE}[2] 🌍 SET TIMEZONE${NC}"
-        echo -e "  ${BLUE}[3] 📤 EXPORT USERS SSH • TROJAN${NC}"
-        echo -e "  ${BLUE}[4] 📥 RESTORE USERS SSH • TROJAN${NC}"
+        echo -e "  ${BLUE}[3] 📤 EXPORT USERS${NC}"
+        echo -e "  ${BLUE}[4] 📥 RESTORE USERS${NC}"
         echo -e "  ${BLUE}[0] 🔙 BACK${NC}\n${LINE}"
         echo -ne "  ${BLUE}SELECT: ${NC}"
         read s
