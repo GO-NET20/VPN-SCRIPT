@@ -1,6 +1,9 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+# منع إغلاق السكربت في حال حدوث تذبذب لحظي في نفق الـ VPN أثناء إعادة تشغيل Xray
+trap '' HUP PIPE
+
 if [ -f /etc/os-release ]; then
     . /etc/os-release
     OS=$ID
@@ -44,7 +47,7 @@ chmod 666 "$XRAY_ACCESS_LOG" 2>/dev/null
 
 # Ensure essential packages are installed
 if ! command -v python3 &> /dev/null || ! command -v pip3 &> /dev/null || ! command -v curl &> /dev/null || ! command -v unzip &> /dev/null; then
-    eval "$CMD python3 python3-pip python3-venv systemd-logind curl unzip" > /dev/null 2>&1
+    eval "$CMD python3 python3-pip python3-venv systemd-logind curl unzip iproute2" > /dev/null 2>&1
 fi
 
 # Create Python virtual environment if it does not exist
@@ -53,7 +56,7 @@ if [ ! -d "$VENV_DIR" ]; then
 fi
 
 # =============================================
-# HELPER: SYNC TROJAN DB WITH XRAY CONFIG
+# HELPER: SYNC TROJAN DB WITH XRAY CONFIG & STATS API
 # =============================================
 sync_trojan_xray() {
     python3 - << 'PYEOF'
@@ -80,28 +83,168 @@ if os.path.exists(trojan_db):
                 pwd, exp_d, exp_t = parts[0], parts[1], parts[2]
                 st = parts[3] if len(parts) >= 4 else "ACTIVE"
                 if exp_d != "EXPIRED" and st == "ACTIVE":
-                    clients.append({"password": pwd, "email": pwd})
+                    clients.append({"password": pwd, "email": pwd, "level": 0})
 
-# Ensure log configuration exists for online monitoring
-if "log" not in cfg:
-    cfg["log"] = {
-        "access": "/var/log/xray/access.log",
-        "error": "/var/log/xray/error.log",
-        "loglevel": "warning"
+# 1. تفعيل اللوغ والإحصائيات الحية (Stats + API) لمعرفة المتصلين الفعليين وعددهم
+cfg["log"] = {
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log",
+    "loglevel": "info"
+}
+cfg["stats"] = {}
+cfg["api"] = {
+    "tag": "api",
+    "services": ["HandlerService", "LoggerService", "StatsService"]
+}
+cfg["policy"] = {
+    "levels": {
+        "0": {
+            "statsUserUplink": True,
+            "statsUserDownlink": True,
+            "statsUserOnline": True
+        }
+    },
+    "system": {
+        "statsInboundUplink": True,
+        "statsInboundDownlink": True
     }
+}
 
+inbounds = cfg.get("inbounds", [])
+has_api_in = False
 updated = False
-for inbound in cfg.get("inbounds", []):
+
+for inbound in inbounds:
+    if inbound.get("tag") == "api":
+        has_api_in = True
     if inbound.get("protocol") == "trojan":
         if "settings" not in inbound:
             inbound["settings"] = {}
         inbound["settings"]["clients"] = clients
         updated = True
 
+if not has_api_in:
+    inbounds.append({
+        "listen": "127.0.0.1",
+        "port": 10085,
+        "protocol": "dokodemo-door",
+        "settings": {"address": "127.0.0.1"},
+        "tag": "api"
+    })
+    cfg["inbounds"] = inbounds
+
+routing = cfg.get("routing", {})
+rules = routing.get("rules", [])
+if not any(r.get("outboundTag") == "api" for r in rules):
+    rules.insert(0, {
+        "inboundTag": ["api"],
+        "outboundTag": "api",
+        "type": "field"
+    })
+    routing["rules"] = rules
+    cfg["routing"] = routing
+
 if updated:
     with open(xray_conf, "w") as f:
         json.dump(cfg, f, indent=2)
-    subprocess.run(["systemctl", "restart", "xray"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+    # إعادة التشغيل في خلفية مستقلة بعد ثانية واحدة حتى تطبع بيانات الحساب قبل رمشة الاتصال
+    subprocess.Popen(
+        "sleep 0.6 && systemctl restart xray >/dev/null 2>&1",
+        shell=True,
+        start_new_session=True
+    )
+PYEOF
+}
+
+# =============================================
+# HELPER: GET LIVE TROJAN ONLINE COUNTS
+# =============================================
+get_trojan_online_counts() {
+    python3 - << 'PYEOF'
+import subprocess, json, re, os, datetime
+
+xray_bin = "/usr/local/bin/xray"
+if not os.path.exists(xray_bin):
+    xray_bin = "xray"
+
+xray_conf = "/usr/local/etc/xray/config.json"
+access_log = "/var/log/xray/access.log"
+counts = {}
+
+# 1. فحص ما إذا كان هناك اتصالات حقيقية نشطة حالياً على بورت Xray أو Trojan-WS عبر ss
+xray_port = 2000
+try:
+    with open(xray_conf, "r") as f:
+        cfg = json.load(f)
+    for ib in cfg.get("inbounds", []):
+        if ib.get("protocol") == "trojan":
+            xray_port = ib.get("port", 2000)
+except Exception:
+    pass
+
+active_tcp_sockets = 0
+try:
+    ss_out = subprocess.getoutput(f"ss -tn state established '( dport = :{xray_port} or sport = :{xray_port} )' 2>/dev/null")
+    lines = [l for l in ss_out.splitlines() if str(xray_port) in l]
+    active_tcp_sockets = len(lines)
+except Exception:
+    active_tcp_sockets = 1
+
+# إذا لم يكن هناك أي اتصال TCP نشط أصلاً على بورت التروجان، فالجميع OFFLINE حتماً
+if active_tcp_sockets == 0:
+    print("{}")
+    exit(0)
+
+# 2. الاستعلام المباشر من ذاكرة عملية Xray عبر API لمعرفة المتصلين الفعليين وعددهم
+api_worked = False
+try:
+    res = subprocess.run(
+        [xray_bin, "api", "statsquery", "--server=127.0.0.1:10085", "-pattern", "user>>>"],
+        capture_output=True, text=True, timeout=2
+    )
+    if res.returncode == 0 and res.stdout.strip():
+        data = json.loads(res.stdout)
+        for item in data.get("stat", []):
+            name = item.get("name", "")
+            val = int(item.get("value", 0))
+            if ">>>online" in name:
+                api_worked = True
+                parts = name.split(">>>")
+                if len(parts) >= 2 and val > 0:
+                    counts[parts[1]] = val
+except Exception:
+    pass
+
+# 3. خطة بديلة ذكية (في حال كانت نسخة Xray قديمة لا تدعم online stat):
+# تقاطع الاتصالات النشطة حالياً مع آخر 25 ثانية فقط من اللوغ وحساب عدد الـ IPs/الجلسات الفريدة
+if not api_worked and not counts and os.path.exists(access_log):
+    try:
+        now = datetime.datetime.now()
+        tail_lines = subprocess.getoutput(f"tail -n 500 {access_log} 2>/dev/null").splitlines()
+        user_ips = {}
+        for line in tail_lines:
+            if "email:" not in line:
+                continue
+            m_time = re.match(r"^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})", line)
+            if m_time:
+                try:
+                    t_log = datetime.datetime.strptime(m_time.group(1), "%Y/%m/%d %H:%M:%S")
+                    if (now - t_log).total_seconds() > 25:
+                        continue
+                except Exception:
+                    pass
+            m_email = re.search(r"email:\s*([^\s]+)", line)
+            m_src = re.search(r"from\s+(?:tcp:)?([0-9a-fA-F\.:]+):\d+", line)
+            if m_email:
+                usr = m_email.group(1).strip()
+                ip = m_src.group(1) if m_src else "session"
+                user_ips.setdefault(usr, set()).add(ip)
+        for u, ips in user_ips.items():
+            counts[u] = len(ips)
+    except Exception:
+        pass
+
+print(json.dumps(counts))
 PYEOF
 }
 
@@ -172,7 +315,7 @@ def sync_xray():
                         pwd, exp_d, exp_t = parts[0], parts[1], parts[2]
                         st = parts[3] if len(parts) >= 4 else "ACTIVE"
                         if exp_d != "EXPIRED" and st == "ACTIVE":
-                            clients.append({"password": pwd, "email": pwd})
+                            clients.append({"password": pwd, "email": pwd, "level": 0})
         for inbound in cfg.get("inbounds", []):
             if inbound.get("protocol") == "trojan":
                 inbound.setdefault("settings", {})["clients"] = clients
@@ -278,6 +421,9 @@ systemctl daemon-reload
 systemctl enable kp_monitor >/dev/null 2>&1
 systemctl restart kp_monitor
 
+# تحديث إعدادات Xray الحالية عند تشغيل السكربت لتفعيل الـ Stats API تلقائياً
+sync_trojan_xray
+
 pause() { echo -e "\n${BLUE}PRESS [ENTER] TO RETURN...${NC}"; read; }
 
 draw_header() {
@@ -288,9 +434,9 @@ draw_header() {
 }
 
 select_protocol() {
-    echo -e "  ${BLUE}[1] 🛡️ SSH${NC}"
-    echo -e "  ${BLUE}[2] ⚡ TROJAN${NC}"
-    echo -e "  ${BLUE}[0] 🔙 BACK${NC}\n${LINE}"
+    echo -e "  ${BLUE}[1] SSH${NC}"
+    echo -e "  ${BLUE}[2] TROJAN${NC}"
+    echo -e "  ${BLUE}[0] BACK${NC}\n${LINE}"
     echo -ne "  ${BLUE}SELECT PROTOCOL: ${NC}"
     read proto_choice
 }
@@ -352,7 +498,7 @@ fun_create() {
             ;;
         2)
             draw_header
-            echo -e "          ⚡ ${BLUE}CREATE TROJAN ACCOUNT${NC}\n${LINE}"
+            echo -e "            ${BLUE}CREATE TROJAN ACCOUNT${NC}\n${LINE}"
             echo -ne " ${BLUE}🔑 Enter Password : ${NC}"
             read p
             if [[ -z "$p" ]]; then echo -e "\n${RED} ❌ Password cannot be empty!${NC}"; pause; return; fi
@@ -383,13 +529,13 @@ fun_create() {
                 echo "$p|$d|$t|ACTIVE" >> "$TROJAN_DB"
             ) 200>"$DB_LOCK"
 
-            sync_trojan_xray
-
             clear
             echo -e "${LINE}\n            ${WHITE}TROJAN ACCOUNT CREATED${NC}\n${LINE}\n"
             echo -e " ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
             echo -e " ${BLUE}📅 Expiry   :${NC} ${WHITE}$d${NC}\n ${BLUE}⏰ Time     :${NC} ${WHITE}$t${NC}\n\n${LINE}"
             echo -e " ${BLUE}📋 Copy     :${NC} ${WHITE}$p${NC}\n${LINE}"
+
+            sync_trojan_xray
             pause
             ;;
         0) return ;;
@@ -472,8 +618,9 @@ fun_renew() {
                 echo "$p|$d|$t|ACTIVE" >> "$TROJAN_DB"
             ) 200>"$DB_LOCK"
 
+            echo -e "\n${GREEN} ✅ TROJAN ACCOUNT RENEWED & UNLOCKED SUCCESSFULLY${NC}"
             sync_trojan_xray
-            echo -e "\n${GREEN} ✅ TROJAN ACCOUNT RENEWED & UNLOCKED SUCCESSFULLY${NC}"; pause
+            pause
             ;;
         0) return ;;
         *) echo -e "\n${RED} ❌ Invalid choice!${NC}"; sleep 1 ;;
@@ -521,8 +668,8 @@ fun_remove() {
                     flock -x 200
                     sed -i "/^$p|/d" "$TROJAN_DB"
                 ) 200>"$DB_LOCK"
-                sync_trojan_xray
                 echo -e "\n${RED} 🗑️ TROJAN ACCOUNT DELETED SUCCESSFULLY${NC}"
+                sync_trojan_xray
             fi
             pause
             ;;
@@ -574,16 +721,16 @@ fun_lock() {
                     sed -i "/^$p|/d" "$TROJAN_DB"
                     echo "$p|$d|$t|LOCKED" >> "$TROJAN_DB"
                 ) 200>"$DB_LOCK"
-                sync_trojan_xray
                 echo -e "\n${GREEN} ⛔ TROJAN ACCOUNT LOCKED & DISCONNECTED${NC}"
+                sync_trojan_xray
             else
                 (
                     flock -x 200
                     sed -i "/^$p|/d" "$TROJAN_DB"
                     echo "$p|$d|$t|ACTIVE" >> "$TROJAN_DB"
                 ) 200>"$DB_LOCK"
-                sync_trojan_xray
                 echo -e "\n${GREEN} 🔓 TROJAN ACCOUNT UNLOCKED${NC}"
+                sync_trojan_xray
             fi
             pause
             ;;
@@ -598,16 +745,16 @@ fun_lock() {
 fun_list() {
     draw_header
     echo -e "               📋 ${BLUE}LIST ACCOUNTS${NC}\n${LINE}"
-    echo -e "  ${BLUE}[1] 🛡️ SSH ACCOUNTS${NC}"
-    echo -e "  ${BLUE}[2] ⚡ TROJAN ACCOUNTS${NC}"
-    echo -e "  ${BLUE}[3] 🌐 LIST ALL (SSH & TROJAN)${NC}"
-    echo -e "  ${BLUE}[0] 🔙 BACK${NC}\n${LINE}"
+    echo -e "  ${BLUE}[1] SSH ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[2] TROJAN ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[3] LIST ALL SSH & TROJAN${NC}"
+    echo -e "  ${BLUE}[0] BACK${NC}\n${LINE}"
     echo -ne "  ${BLUE}SELECT: ${NC}"
     read l_choice
 
     clear
     if [[ "$l_choice" == "1" || "$l_choice" == "3" ]]; then
-        echo -e "${LINE}\n            🛡️ ${BLUE}SSH ACCOUNTS LIST${NC}\n${LINE}"
+        echo -e "${LINE}\n            ${BLUE}SSH ACCOUNTS LIST${NC}\n${LINE}"
         SHADOW_CACHE=$(cat /etc/shadow 2>/dev/null)
         while IFS='|' read -r u d t rest; do
             [[ -z "$u" ]] && continue
@@ -621,7 +768,7 @@ fun_list() {
     fi
 
     if [[ "$l_choice" == "2" || "$l_choice" == "3" ]]; then
-        echo -e "\n${LINE}\n           ⚡ ${BLUE}TROJAN ACCOUNTS LIST${NC}\n${LINE}"
+        echo -e "\n${LINE}\n          ${BLUE}TROJAN ACCOUNTS LIST${NC}\n${LINE}"
         while IFS='|' read -r p d t st rest; do
             [[ -z "$p" ]] && continue
             if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
@@ -696,7 +843,7 @@ fun_search() {
 }
 
 # =============================================
-# 7. LIVE MONITOR (SSH & TROJAN)
+# 7. LIVE MONITOR (SSH & TROJAN) WITH COUNTS
 # =============================================
 fun_monitor_view() {
     clear
@@ -718,17 +865,13 @@ fun_monitor_view() {
     done < "$USER_DB"
 
     echo -e "\n${LINE}\n ${YELLOW}⚡ [TROJAN ACCOUNTS]${NC}"
-    NOW_M=$(date +"%Y/%m/%d %H:%M")
-    PREV_M=$(date -d "1 minute ago" +"%Y/%m/%d %H:%M")
-    RECENT_XRAY_LOGS=""
-    if [[ -f "$XRAY_ACCESS_LOG" ]]; then
-        RECENT_XRAY_LOGS=$(tail -n 1000 "$XRAY_ACCESS_LOG" 2>/dev/null | grep -E "$NOW_M|$PREV_M")
-    fi
+    TROJAN_COUNTS_JSON=$(get_trojan_online_counts)
 
     while IFS='|' read -r p d t st rest; do
         [[ -z "$p" ]] && continue
-        if [[ -n "$RECENT_XRAY_LOGS" ]] && echo "$RECENT_XRAY_LOGS" | grep -q "email: $p"; then
-            STATUS="${GREEN}🟢 ONLINE${NC}"
+        TRJ_COUNT=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get(sys.argv[2], 0))" "$TROJAN_COUNTS_JSON" "$p" 2>/dev/null)
+        if [[ -n "$TRJ_COUNT" && "$TRJ_COUNT" -gt 0 ]]; then
+            STATUS="${GREEN}🟢 ONLINE [ ${TRJ_COUNT} ]${NC}"
         else
             STATUS="${RED}🔴 OFFLINE${NC}"
         fi
@@ -882,7 +1025,7 @@ def sync_xray():
                         pwd, exp_d, exp_t = parts[0], parts[1], parts[2]
                         st = parts[3] if len(parts) >= 4 else "ACTIVE"
                         if exp_d != "EXPIRED" and st == "ACTIVE":
-                            clients.append({"password": pwd, "email": pwd})
+                            clients.append({"password": pwd, "email": pwd, "level": 0})
         for inbound in xcfg.get("inbounds", []):
             if inbound.get("protocol") == "trojan":
                 inbound.setdefault("settings", {})["clients"] = clients
@@ -890,6 +1033,63 @@ def sync_xray():
             json.dump(xcfg, f, indent=2)
         subprocess.run(["systemctl", "restart", "xray"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
     except: pass
+
+def get_trojan_counts():
+    xray_bin = "/usr/local/bin/xray" if os.path.exists("/usr/local/bin/xray") else "xray"
+    counts = {}
+    xray_port = 2000
+    try:
+        with open(XRAY_CONF, "r") as f:
+            xcfg = json.load(f)
+        for ib in xcfg.get("inbounds", []):
+            if ib.get("protocol") == "trojan":
+                xray_port = ib.get("port", 2000)
+    except: pass
+
+    try:
+        ss_out = subprocess.getoutput(f"ss -tn state established '( dport = :{xray_port} or sport = :{xray_port} )' 2>/dev/null")
+        if len([l for l in ss_out.splitlines() if str(xray_port) in l]) == 0:
+            return {}
+    except: pass
+
+    api_worked = False
+    try:
+        res = subprocess.run([xray_bin, "api", "statsquery", "--server=127.0.0.1:10085", "-pattern", "user>>>"], capture_output=True, text=True, timeout=2)
+        if res.returncode == 0 and res.stdout.strip():
+            data = json.loads(res.stdout)
+            for item in data.get("stat", []):
+                name = item.get("name", "")
+                val = int(item.get("value", 0))
+                if ">>>online" in name:
+                    api_worked = True
+                    parts = name.split(">>>")
+                    if len(parts) >= 2 and val > 0:
+                        counts[parts[1]] = val
+    except: pass
+
+    if not api_worked and not counts and os.path.exists(XRAY_ACCESS_LOG):
+        try:
+            now = datetime.datetime.now()
+            tail_lines = subprocess.getoutput(f"tail -n 500 {XRAY_ACCESS_LOG} 2>/dev/null").splitlines()
+            user_ips = {}
+            for line in tail_lines:
+                if "email:" not in line: continue
+                m_time = re.match(r"^(\d{4}/\d{2}/\d{2} \d{2}:\d{2}:\d{2})", line)
+                if m_time:
+                    try:
+                        t_log = datetime.datetime.strptime(m_time.group(1), "%Y/%m/%d %H:%M:%S")
+                        if (now - t_log).total_seconds() > 25: continue
+                    except: pass
+                m_email = re.search(r"email:\s*([^\s]+)", line)
+                m_src = re.search(r"from\s+(?:tcp:)?([0-9a-fA-F\.:]+):\d+", line)
+                if m_email:
+                    usr = m_email.group(1).strip()
+                    ip = m_src.group(1) if m_src else "session"
+                    user_ips.setdefault(usr, set()).add(ip)
+            for u, ips in user_ips.items():
+                counts[u] = len(ips)
+        except: pass
+    return counts
 
 def get_menu():
     return InlineKeyboardMarkup([
@@ -1125,28 +1325,29 @@ def btn(u, c):
                     c.bot.send_message(chat_id=u.effective_chat.id, text=body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if idx == len(chunks) - 1 else None)
 
         elif d == 'onl':
+            ssh_counts = {}
             try:
-                active_ssh = set(subprocess.getoutput("ps -axo user:32,comm | grep -E 'sshd|dropbear' | awk '{print $1}'").split())
-            except: active_ssh = set()
+                ps_out = subprocess.getoutput("ps -axo user:32,comm | grep -E 'sshd|dropbear' | awk '{print $1}'").split()
+                for u_name in ps_out:
+                    ssh_counts[u_name] = ssh_counts.get(u_name, 0) + 1
+            except: pass
 
-            now_m = datetime.datetime.now().strftime("%Y/%m/%d %H:%M")
-            prev_m = (datetime.datetime.now() - datetime.timedelta(minutes=1)).strftime("%Y/%m/%d %H:%M")
-            recent_xray = ""
-            if os.path.exists(XRAY_ACCESS_LOG):
-                recent_xray = subprocess.getoutput(f"tail -n 1000 {XRAY_ACCESS_LOG} | grep -E '{now_m}|{prev_m}'")
+            trj_counts = get_trojan_counts()
 
             items = []
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
                     p = l.strip().split('|')
                     if len(p) >= 3 and "root" not in p[0]:
-                        st = "🟢 ONLINE" if p[0] in active_ssh else "🔴 OFFLINE"
+                        cnt = ssh_counts.get(p[0], 0)
+                        st = f"🟢 ONLINE [ {cnt} ]" if cnt > 0 else "🔴 OFFLINE"
                         items.append(f"🛡️ [SSH] 👤 <code>{p[0]}</code> : {st}\n")
             if os.path.exists(TROJAN_DB):
                 for l in open(TROJAN_DB):
                     p = l.strip().split('|')
                     if len(p) >= 3:
-                        st = "🟢 ONLINE" if f"email: {p[0]}" in recent_xray else "🔴 OFFLINE"
+                        cnt = trj_counts.get(p[0], 0)
+                        st = f"🟢 ONLINE [ {cnt} ]" if cnt > 0 else "🔴 OFFLINE"
                         items.append(f"⚡ [TRJ] 🔑 <code>{p[0]}</code> : {st}\n")
 
             if not items:
@@ -1484,7 +1685,25 @@ function install_trojan_ws() {
   "log": {
     "access": "/var/log/xray/access.log",
     "error": "/var/log/xray/error.log",
-    "loglevel": "warning"
+    "loglevel": "info"
+  },
+  "stats": {},
+  "api": {
+    "tag": "api",
+    "services": ["HandlerService", "LoggerService", "StatsService"]
+  },
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true,
+        "statsUserOnline": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true
+    }
   },
   "inbounds": [
     {
@@ -1499,13 +1718,31 @@ function install_trojan_ws() {
         "network": "tcp",
         "security": "none"
       }
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": 10085,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "tag": "api"
     }
   ],
   "outbounds": [
     {
       "protocol": "freedom"
     }
-  ]
+  ],
+  "routing": {
+    "rules": [
+      {
+        "inboundTag": ["api"],
+        "outboundTag": "api",
+        "type": "field"
+      }
+    ]
+  }
 }
 EOF
 
@@ -1661,10 +1898,10 @@ fun_ws_tunnel_menu() {
 # =============================================
 while true; do
     draw_header
-    echo -e "  ${BLUE}[01] 👤 CREATE ACCOUNT (SSH / TROJAN)${NC}"
+    echo -e "  ${BLUE}[01] 👤 CREATE ACCOUNT${NC}"
     echo -e "  ${BLUE}[02] 🔄 RENEW ACCOUNT${NC}"
     echo -e "  ${BLUE}[03] 🗑 DELETE ACCOUNT${NC}"
-    echo -e "  ${BLUE}[04] ⛔ LOCK / UNLOCK ACCOUNT${NC}"
+    echo -e "  ${BLUE}[04] ⛔ LOCK - UNLOCK ACCOUNT${NC}"
     echo -e "  ${BLUE}[05] 📋 LIST ACCOUNTS${NC}"
     echo -e "  ${BLUE}[06] 🔍 SEARCH ACCOUNT${NC}"
     echo -e "  ${BLUE}[07] 👁 MONITOR ACCOUNT${NC}"
