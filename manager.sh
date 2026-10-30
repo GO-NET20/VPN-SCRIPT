@@ -1,7 +1,7 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
-# منع إغلاق السكربت في حال حدوث تذبذب لحظي في نفق الـ VPN أثناء إعادة تشغيل Xray
+# 
 trap '' HUP PIPE
 
 if [ -f /etc/os-release ]; then
@@ -846,39 +846,57 @@ fun_search() {
 # 7. LIVE MONITOR (SSH & TROJAN) WITH COUNTS
 # =============================================
 fun_monitor_view() {
+    draw_header
+    echo -e "         👁 ${BLUE}LIVE SSH & TROJAN MONITOR${NC}\n${LINE}"
+    echo -e "  ${BLUE}[1] 🛡️ LIVE SSH ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[2] ⚡ LIVE TROJAN ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[3] 🌐 LIVE ALL (SSH & TROJAN)${NC}"
+    echo -e "  ${BLUE}[0] 🔙 BACK${NC}\n${LINE}"
+    echo -ne "  ${BLUE}SELECT: ${NC}"
+    read m_choice
+
+    if [[ "$m_choice" == "0" ]]; then
+        return
+    fi
+
     clear
-    echo -e "${LINE}\n   ${BLUE}======= 👁 LIVE SSH & TROJAN MONITOR =======${NC}\n${LINE}"
-    
-    echo -e " ${CYAN}🛡️ [SSH ACCOUNTS]${NC}"
-    ACTIVE_USERS_DATA=$(ps -axo user:32,comm 2>/dev/null | grep -E 'sshd|dropbear' | awk '{print $1}' | sort | uniq -c)
-    while IFS='|' read -r u d t rest; do
-        [[ -z "$u" ]] && continue
-        if id "$u" &>/dev/null; then
-             USER_CONN_COUNT=$(echo "$ACTIVE_USERS_DATA" | grep -w "$u" | awk '{print $1}')
-             if [[ -n "$USER_CONN_COUNT" && "$USER_CONN_COUNT" -gt 0 ]]; then
-                 STATUS="${GREEN}🟢 ONLINE [ ${USER_CONN_COUNT} ]${NC}"
-             else
-                 STATUS="${RED}🔴 OFFLINE${NC}"
-             fi
-             printf " ${BLUE}👤 %-16s${NC} %s\n" "$u" "$STATUS"
-        fi
-    done < "$USER_DB"
+    echo -e "${LINE}\n   ${BLUE}======= 👁 LIVE MONITOR =======${NC}\n${LINE}"
 
-    echo -e "\n${LINE}\n ${YELLOW}⚡ [TROJAN ACCOUNTS]${NC}"
-    TROJAN_COUNTS_JSON=$(get_trojan_online_counts)
+    if [[ "$m_choice" == "1" || "$m_choice" == "3" ]]; then
+        echo -e " ${CYAN}🛡️ [SSH ACCOUNTS]${NC}"
+        ACTIVE_USERS_DATA=$(ps -axo user:32,comm 2>/dev/null | grep -E 'sshd|dropbear' | awk '{print $1}' | sort | uniq -c)
+        while IFS='|' read -r u d t rest; do
+            [[ -z "$u" ]] && continue
+            if id "$u" &>/dev/null; then
+                 USER_CONN_COUNT=$(echo "$ACTIVE_USERS_DATA" | grep -w "$u" | awk '{print $1}')
+                 if [[ -n "$USER_CONN_COUNT" && "$USER_CONN_COUNT" -gt 0 ]]; then
+                     STATUS="${GREEN}🟢 ONLINE [ ${USER_CONN_COUNT} ]${NC}"
+                 else
+                     STATUS="${RED}🔴 OFFLINE${NC}"
+                 fi
+                 printf " ${BLUE}👤 %-16s${NC} %s\n" "$u" "$STATUS"
+            fi
+        done < "$USER_DB"
+        echo -e "${LINE}"
+    fi
 
-    while IFS='|' read -r p d t st rest; do
-        [[ -z "$p" ]] && continue
-        TRJ_COUNT=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get(sys.argv[2], 0))" "$TROJAN_COUNTS_JSON" "$p" 2>/dev/null)
-        if [[ -n "$TRJ_COUNT" && "$TRJ_COUNT" -gt 0 ]]; then
-            STATUS="${GREEN}🟢 ONLINE [ ${TRJ_COUNT} ]${NC}"
-        else
-            STATUS="${RED}🔴 OFFLINE${NC}"
-        fi
-        printf " ${BLUE}🔑 %-16s${NC} %s\n" "$p" "$STATUS"
-    done < "$TROJAN_DB"
+    if [[ "$m_choice" == "2" || "$m_choice" == "3" ]]; then
+        echo -e " ${YELLOW}⚡ [TROJAN ACCOUNTS]${NC}"
+        TROJAN_COUNTS_JSON=$(get_trojan_online_counts)
+
+        while IFS='|' read -r p d t st rest; do
+            [[ -z "$p" ]] && continue
+            TRJ_COUNT=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get(sys.argv[2], 0))" "$TROJAN_COUNTS_JSON" "$p" 2>/dev/null)
+            if [[ -n "$TRJ_COUNT" && "$TRJ_COUNT" -gt 0 ]]; then
+                STATUS="${GREEN}🟢 ONLINE [ ${TRJ_COUNT} ]${NC}"
+            else
+                STATUS="${RED}🔴 OFFLINE${NC}"
+            fi
+            printf " ${BLUE}🔑 %-16s${NC} %s\n" "$p" "$STATUS"
+        done < "$TROJAN_DB"
+        echo -e "${LINE}"
+    fi
     
-    echo -e "${LINE}"
     pause
 }
 
