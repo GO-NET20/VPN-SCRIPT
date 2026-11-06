@@ -1702,7 +1702,7 @@ fun_ws_tunnel_menu() {
 while true; do
 clear
 echo -e "${L_BLUE}========================================${NC}"
-echo -e "${B_RED} V P N I N S T A L L E R ${NC}"
+echo -e "${B_RED}        V P N • I N S T A L L E R ${NC}"
 echo -e "${L_BLUE}========================================${NC}"
 echo -e " ${YELLOW}[01]${NC} ${D_BLUE}INSTALL SSH WS${NC}"
 echo -e " ${YELLOW}[02]${NC} ${D_BLUE}INSTALL TROJAN WS${NC}"
