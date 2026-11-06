@@ -1620,8 +1620,8 @@ echo
 echo -e "${GREEN}✅ TROJAN WS INSTALLED SUCCESSFULLY!${NC}"
 printf "EXTERNAL PORT      : ${CYAN}%s${NC}\n" "$ws_port"
 printf "XRAY LOCAL PORT    : ${CYAN}%s${NC}\n" "$xray_port"
-printf "SERVICE NAMES      : ${CYAN}XRAY, TROJAN-WS${NC}\n"
-[[ -n "$trojan_password" ]] && printf "TROJAN PASSWORD    : ${CYAN}%s ( Saved )${NC}\n" "$trojan_password"
+printf "SERVICE NAMES      : ${CYAN}XRAY • TROJAN-WS${NC}\n"
+[[ -n "$trojan_password" ]] && printf "TROJAN PASSWORD    : ${CYAN}%s [ Saved ]${NC}\n" "$trojan_password"
 pause_menu
 }
 
