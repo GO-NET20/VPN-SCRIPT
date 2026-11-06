@@ -1,21 +1,22 @@
 #!/bin/bash
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
+# 
 trap '' HUP PIPE
 
 if [ -f /etc/os-release ]; then
-. /etc/os-release
-OS=$ID
+    . /etc/os-release
+    OS=$ID
 else
-OS="Unknown"
+    OS="Unknown"
 fi
 
 if [[ "$OS" == "ubuntu" || "$OS" == "debian" || "$OS" == "kali" ]]; then
-CMD="apt-get update -y && apt-get install -y"
+    CMD="apt-get update -y && apt-get install -y"
 elif [[ "$OS" == "centos" || "$OS" == "almalinux" || "$OS" == "rocky" ]]; then
-CMD="yum install -y"
+    CMD="yum install -y"
 else
-CMD="apt-get install -y"
+    CMD="apt-get install -y"
 fi
 
 USER_DB="/etc/xpanel/users_db.txt"
@@ -33,6 +34,7 @@ PYTHON_BIN="$VENV_DIR/bin/python3"
 PIP_BIN="$VENV_DIR/bin/pip3"
 DB_LOCK="/etc/xpanel/.db.lock"
 
+# Colors
 RED=$'\033[1;31m'; B_RED=$'\033[1;31m'; GREEN=$'\033[1;32m'; YELLOW=$'\033[1;33m'
 BLUE=$'\033[1;34m'; CYAN=$'\033[1;36m'; L_BLUE=$'\033[1;36m'; D_BLUE=$'\033[0;34m'
 NC=$'\033[0m'; WHITE=$'\033[1;37m'
@@ -43,16 +45,21 @@ touch "$USER_DB" "$TROJAN_DB" "$LOG_FILE" "$DB_LOCK" "$XRAY_ACCESS_LOG"
 chmod 666 "$XRAY_ACCESS_LOG" 2>/dev/null
 [[ ! -f "$BOT_CONF" ]] && touch "$BOT_CONF"
 
-if ! command -v python3 &> /dev/null || ! command -v pip3 &> /dev/null || ! command -v curl &> /dev/null || ! command -v unzip &> /dev/null || ! command -v fuser &> /dev/null; then
-eval "$CMD python3 python3-pip python3-venv systemd-logind curl unzip iproute2 psmisc" > /dev/null 2>&1
+# Ensure essential packages are installed
+if ! command -v python3 &> /dev/null || ! command -v pip3 &> /dev/null || ! command -v curl &> /dev/null || ! command -v unzip &> /dev/null; then
+    eval "$CMD python3 python3-pip python3-venv systemd-logind curl unzip iproute2" > /dev/null 2>&1
 fi
 
+# Create Python virtual environment if it does not exist
 if [ ! -d "$VENV_DIR" ]; then
-python3 -m venv "$VENV_DIR"
+    python3 -m venv "$VENV_DIR"
 fi
 
+# =============================================
+# HELPER: SYNC TROJAN DB WITH XRAY CONFIG & STATS API
+# =============================================
 sync_trojan_xray() {
-python3 - << 'PYEOF'
+    python3 - << 'PYEOF'
 import json, os, subprocess
 
 trojan_db = "/etc/xpanel/trojan_db.txt"
@@ -78,6 +85,7 @@ if os.path.exists(trojan_db):
                 if exp_d != "EXPIRED" and st == "ACTIVE":
                     clients.append({"password": pwd, "email": pwd, "level": 0})
 
+# 1. تفعيل اللوغ والإحصائيات الحية (Stats + API) لمعرفة المتصلين الفعليين وعددهم
 cfg["log"] = {
     "access": "/var/log/xray/access.log",
     "error": "/var/log/xray/error.log",
@@ -123,7 +131,7 @@ if not has_api_in:
         "settings": {"address": "127.0.0.1"},
         "tag": "api"
     })
-cfg["inbounds"] = inbounds
+    cfg["inbounds"] = inbounds
 
 routing = cfg.get("routing", {})
 rules = routing.get("rules", [])
@@ -133,12 +141,13 @@ if not any(r.get("outboundTag") == "api" for r in rules):
         "outboundTag": "api",
         "type": "field"
     })
-routing["rules"] = rules
-cfg["routing"] = routing
+    routing["rules"] = rules
+    cfg["routing"] = routing
 
 if updated:
     with open(xray_conf, "w") as f:
         json.dump(cfg, f, indent=2)
+    # إعادة التشغيل في خلفية مستقلة بعد ثانية واحدة حتى تطبع بيانات الحساب قبل رمشة الاتصال
     subprocess.Popen(
         "sleep 0.6 && systemctl restart xray >/dev/null 2>&1",
         shell=True,
@@ -147,8 +156,11 @@ if updated:
 PYEOF
 }
 
+# =============================================
+# HELPER: GET LIVE TROJAN ONLINE COUNTS
+# =============================================
 get_trojan_online_counts() {
-python3 - << 'PYEOF'
+    python3 - << 'PYEOF'
 import subprocess, json, re, os, datetime
 
 xray_bin = "/usr/local/bin/xray"
@@ -159,13 +171,14 @@ xray_conf = "/usr/local/etc/xray/config.json"
 access_log = "/var/log/xray/access.log"
 counts = {}
 
+# 1. فحص ما إذا كان هناك اتصالات حقيقية نشطة حالياً على بورت Xray أو Trojan-WS عبر ss
 xray_port = 2000
 try:
     with open(xray_conf, "r") as f:
         cfg = json.load(f)
-        for ib in cfg.get("inbounds", []):
-            if ib.get("protocol") == "trojan":
-                xray_port = ib.get("port", 2000)
+    for ib in cfg.get("inbounds", []):
+        if ib.get("protocol") == "trojan":
+            xray_port = ib.get("port", 2000)
 except Exception:
     pass
 
@@ -177,10 +190,12 @@ try:
 except Exception:
     active_tcp_sockets = 1
 
+# إذا لم يكن هناك أي اتصال TCP نشط أصلاً على بورت التروجان، فالجميع OFFLINE حتماً
 if active_tcp_sockets == 0:
     print("{}")
     exit(0)
 
+# 2. الاستعلام المباشر من ذاكرة عملية Xray عبر API لمعرفة المتصلين الفعليين وعددهم
 api_worked = False
 try:
     res = subprocess.run(
@@ -200,6 +215,8 @@ try:
 except Exception:
     pass
 
+# 3. خطة بديلة ذكية (في حال كانت نسخة Xray قديمة لا تدعم online stat):
+# تقاطع الاتصالات النشطة حالياً مع آخر 25 ثانية فقط من اللوغ وحساب عدد الـ IPs/الجلسات الفريدة
 if not api_worked and not counts and os.path.exists(access_log):
     try:
         now = datetime.datetime.now()
@@ -217,7 +234,7 @@ if not api_worked and not counts and os.path.exists(access_log):
                 except Exception:
                     pass
             m_email = re.search(r"email:\s*([^\s]+)", line)
-            m_src = re.search(r"from\s+(?:tcp:)?([0-9a-fA-F.:]+):\d+", line)
+            m_src = re.search(r"from\s+(?:tcp:)?([0-9a-fA-F\.:]+):\d+", line)
             if m_email:
                 usr = m_email.group(1).strip()
                 ip = m_src.group(1) if m_src else "session"
@@ -231,6 +248,9 @@ print(json.dumps(counts))
 PYEOF
 }
 
+# =============================================
+# EXPIRY MONITOR (PYTHON) - SSH & TROJAN
+# =============================================
 cat > "$MONITOR_SCRIPT" << 'EOF'
 #!/usr/bin/env python3
 import datetime, subprocess, os, time, fcntl, json
@@ -262,7 +282,7 @@ def log_event(msg):
 def send_alert(msg, user_key):
     try:
         cfg = load_config()
-        if cfg.get("ALERTS") != "ON": return
+        if cfg.get("ALERTS") != "ON": return 
         now = time.time()
         if user_key in alert_cache and now - alert_cache[user_key] < 60: return
         alert_cache[user_key] = now
@@ -310,17 +330,22 @@ def check_loop():
             with open(LOCK_FILE, "a") as lock_f:
                 fcntl.flock(lock_f, fcntl.LOCK_EX)
                 now = datetime.datetime.now()
+                
+                # 1. Check SSH Users
                 if os.path.exists(DB_FILE):
                     with open(DB_FILE, 'r+') as f:
                         lines = f.readlines()
                         new_lines = []
                         status_changed = False
+                        
                         for line in lines:
                             parts = line.strip().split('|')
                             if len(parts) < 3: continue
                             user, exp_date, exp_time = parts[0], parts[1], parts[2]
+
                             if "V1" in user or "Turbo" in user or user == "root":
                                 new_lines.append(line); continue
+                            
                             expired = False
                             if exp_date.upper() not in ["NEVER", "EXPIRED"]:
                                 try:
@@ -331,22 +356,28 @@ def check_loop():
                                         log_event(f"ACCOUNT EXPIRED [SSH]: {user} locked and disconnected.")
                                         send_alert(f"🔒 <b>SSH ACCOUNT EXPIRED</b>\n\n👤 User: <code>{user}</code>\n🛑 Account forcefully disconnected.", f"ssh_{user}_exp")
                                 except: pass
+                            
                             if expired:
                                 new_lines.append(f"{user}|EXPIRED|00:00\n")
                             else:
                                 new_lines.append(line)
+                        
                         if status_changed:
                             f.seek(0); f.writelines(new_lines); f.truncate()
+
+                # 2. Check Trojan Users
                 if os.path.exists(TROJAN_DB):
                     with open(TROJAN_DB, 'r+') as f:
                         t_lines = f.readlines()
                         new_t_lines = []
                         t_changed = False
+
                         for line in t_lines:
                             parts = line.strip().split('|')
                             if len(parts) < 3: continue
                             pwd, exp_date, exp_time = parts[0], parts[1], parts[2]
                             st = parts[3] if len(parts) >= 4 else "ACTIVE"
+
                             expired = False
                             if exp_date.upper() not in ["NEVER", "EXPIRED"]:
                                 try:
@@ -356,13 +387,16 @@ def check_loop():
                                         log_event(f"ACCOUNT EXPIRED [TROJAN]: {pwd} locked and disconnected.")
                                         send_alert(f"🔒 <b>TROJAN ACCOUNT EXPIRED</b>\n\n🔑 Password: <code>{pwd}</code>\n🛑 Removed from Xray active clients.", f"trj_{pwd}_exp")
                                 except: pass
+
                             if expired:
                                 new_t_lines.append(f"{pwd}|EXPIRED|00:00|LOCKED\n")
                             else:
                                 new_t_lines.append(f"{pwd}|{exp_date}|{exp_time}|{st}\n")
+
                         if t_changed:
                             f.seek(0); f.writelines(new_t_lines); f.truncate()
-                sync_xray()
+                            sync_xray()
+
                 fcntl.flock(lock_f, fcntl.LOCK_UN)
         except: pass
         time.sleep(10)
@@ -387,472 +421,584 @@ systemctl daemon-reload
 systemctl enable kp_monitor >/dev/null 2>&1
 systemctl restart kp_monitor
 
+# تحديث إعدادات Xray الحالية عند تشغيل السكربت لتفعيل الـ Stats API تلقائياً
 sync_trojan_xray
 
 pause() { echo -e "\n${BLUE}PRESS [ENTER] TO RETURN...${NC}"; read; }
 
 draw_header() {
-clear
-echo -e "${LINE}"
-echo -e " ${BLUE}=== SSH & TROJAN • MANAGER ===${NC}"
-echo -e "${LINE}"
+    clear
+    echo -e "${LINE}"
+    echo -e "         ${BLUE}=== SSH & TROJAN • MANAGER ===${NC}"
+    echo -e "${LINE}"
 }
 
 select_protocol() {
-echo -e " ${BLUE}[1] SSH${NC}"
-echo -e " ${BLUE}[2] TROJAN${NC}"
-echo -e " ${BLUE}[0] BACK${NC}\n${LINE}"
-echo -ne " ${BLUE}SELECT PROTOCOL: ${NC}"
-read proto_choice
+    echo -e "  ${BLUE}[1] SSH${NC}"
+    echo -e "  ${BLUE}[2] TROJAN${NC}"
+    echo -e "  ${BLUE}[0] BACK${NC}\n${LINE}"
+    echo -ne "  ${BLUE}SELECT PROTOCOL: ${NC}"
+    read proto_choice
 }
 
+# =============================================
+# 1. CREATE ACCOUNT (SSH & TROJAN)
+# =============================================
 fun_create() {
-draw_header
-echo -e " 👤 ${BLUE}CREATE ACCOUNT${NC}\n${LINE}"
-select_protocol
-case "$proto_choice" in
-1)
-draw_header
-echo -e " 🛡️ ${BLUE}CREATE SSH ACCOUNT${NC}\n${LINE}"
-echo -ne " ${BLUE}👤 Enter Username : ${NC}"
-read u
-if [[ -z "$u" ]]; then echo -e "\n${RED} ❌ Username cannot be empty!${NC}"; pause; return; fi
-if [[ ! "$u" =~ ^[a-zA-Z0-9_]+$ ]]; then echo -e "\n${RED} ❌ Invalid Username! Use only letters and numbers.${NC}"; pause; return; fi
-if id "$u" &>/dev/null || grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ USER ALREADY EXISTS!${NC}"; pause; return; fi
+    draw_header
+    echo -e "               👤 ${BLUE}CREATE ACCOUNT${NC}\n${LINE}"
+    select_protocol
+    case "$proto_choice" in
+        1)
+            draw_header
+            echo -e "           🛡️ ${BLUE}CREATE SSH ACCOUNT${NC}\n${LINE}"
+            echo -ne " ${BLUE}👤 Enter Username : ${NC}"
+            read u
+            if [[ -z "$u" ]]; then echo -e "\n${RED} ❌ Username cannot be empty!${NC}"; pause; return; fi
+            if [[ ! "$u" =~ ^[a-zA-Z0-9_]+$ ]]; then echo -e "\n${RED} ❌ Invalid Username! Use only letters and numbers.${NC}"; pause; return; fi
+            if id "$u" &>/dev/null || grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ USER ALREADY EXISTS!${NC}"; pause; return; fi
 
-echo -ne " ${BLUE}🔑 Enter Password : ${NC}"
-read p
-if [[ -z "$p" ]]; then echo -e "\n${RED} ❌ Password cannot be empty!${NC}"; pause; return; fi
-echo -ne " ${BLUE}⏳ Set Expiry Date [Y/N] : ${NC}"
-read exp_choice
-if [[ "${exp_choice,,}" == "y" ]]; then
-echo -ne " ${BLUE}📅 Enter number of days : ${NC}"
-read CUSTOM_DAYS
-if [[ "$CUSTOM_DAYS" =~ ^[0-9]+$ ]] && [ "$CUSTOM_DAYS" -gt 0 ]; then
-START_TIMESTAMP=$(date +%s)
-SECONDS_IN_DURATION=$(( CUSTOM_DAYS * 24 * 60 * 60 ))
-EXPIRATION_TIMESTAMP=$(( START_TIMESTAMP + SECONDS_IN_DURATION ))
-d=$(date -d "@$EXPIRATION_TIMESTAMP" +"%Y-%m-%d")
-t=$(date -d "@$EXPIRATION_TIMESTAMP" +"%H:%M")
-else
-echo -e "\n${RED} ❌ Invalid number of days! Setting to NEVER.${NC}"
-sleep 2; d="NEVER"; t="00:00"
-fi
-else
-d="NEVER"; t="00:00"
-fi
-useradd -M -s /bin/false "$u" >/dev/null 2>&1
-echo "$u:$p" | chpasswd >/dev/null 2>&1
-( flock -x 200; echo "$u|$d|$t" >> "$USER_DB" ) 200>"$DB_LOCK"
-clear
-echo -e "${LINE}\n ${WHITE}SSH ACCOUNT CREATED${NC}\n${LINE}\n"
-echo -e " ${BLUE}👤 Username :${NC} ${WHITE}$u${NC}\n ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
-echo -e " ${BLUE}📅 Expiry :${NC} ${WHITE}$d${NC}\n ${BLUE}⏰ Time :${NC} ${WHITE}$t${NC}\n\n${LINE}"
-echo -e " ${BLUE}📋 Copy :${NC} ${WHITE}$u:$p${NC}\n${LINE}"
-pause
-;;
-2)
-draw_header
-echo -e " ${BLUE}CREATE TROJAN ACCOUNT${NC}\n${LINE}"
-echo -ne " ${BLUE}🔑 Enter Password : ${NC}"
-read p
-if [[ -z "$p" ]]; then echo -e "\n${RED} ❌ Password cannot be empty!${NC}"; pause; return; fi
-if [[ ! "$p" =~ ^[a-zA-Z0-9_@-]+$ ]]; then echo -e "\n${RED} ❌ Invalid Password! Use letters, numbers, _, -, or @.${NC}"; pause; return; fi
-if grep -q "^$p|" "$TROJAN_DB"; then echo -e "\n${RED} ❌ PASSWORD ALREADY EXISTS!${NC}"; pause; return; fi
-echo -ne " ${BLUE}⏳ Set Expiry Date [Y/N] : ${NC}"
-read exp_choice
-if [[ "${exp_choice,,}" == "y" ]]; then
-echo -ne " ${BLUE}📅 Enter number of days : ${NC}"
-read CUSTOM_DAYS
-if [[ "$CUSTOM_DAYS" =~ ^[0-9]+$ ]] && [ "$CUSTOM_DAYS" -gt 0 ]; then
-START_TIMESTAMP=$(date +%s)
-SECONDS_IN_DURATION=$(( CUSTOM_DAYS * 24 * 60 * 60 ))
-EXPIRATION_TIMESTAMP=$(( START_TIMESTAMP + SECONDS_IN_DURATION ))
-d=$(date -d "@$EXPIRATION_TIMESTAMP" +"%Y-%m-%d")
-t=$(date -d "@$EXPIRATION_TIMESTAMP" +"%H:%M")
-else
-echo -e "\n${RED} ❌ Invalid number of days! Setting to NEVER.${NC}"
-sleep 2; d="NEVER"; t="00:00"
-fi
-else
-d="NEVER"; t="00:00"
-fi
-( flock -x 200; echo "$p|$d|$t|ACTIVE" >> "$TROJAN_DB" ) 200>"$DB_LOCK"
-clear
-echo -e "${LINE}\n ${WHITE}TROJAN ACCOUNT CREATED${NC}\n${LINE}\n"
-echo -e " ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
-echo -e " ${BLUE}📅 Expiry :${NC} ${WHITE}$d${NC}\n ${BLUE}⏰ Time :${NC} ${WHITE}$t${NC}\n\n${LINE}"
-echo -e " ${BLUE}📋 Copy :${NC} ${WHITE}$p${NC}\n${LINE}"
-sync_trojan_xray
-pause
-;;
-0) return ;;
-*) echo -e "\n${RED} ❌ Invalid choice!${NC}"; sleep 1 ;;
-esac
+            echo -ne " ${BLUE}🔑 Enter Password : ${NC}"
+            read p
+            if [[ -z "$p" ]]; then echo -e "\n${RED} ❌ Password cannot be empty!${NC}"; pause; return; fi
+
+            echo -ne " ${BLUE}⏳ Set Expiry Date [Y/N] : ${NC}"
+            read exp_choice
+            if [[ "${exp_choice,,}" == "y" ]]; then
+                echo -ne " ${BLUE}📅 Enter number of days : ${NC}"
+                read CUSTOM_DAYS
+                if [[ "$CUSTOM_DAYS" =~ ^[0-9]+$ ]] && [ "$CUSTOM_DAYS" -gt 0 ]; then
+                    START_TIMESTAMP=$(date +%s)
+                    SECONDS_IN_DURATION=$(( CUSTOM_DAYS * 24 * 60 * 60 ))
+                    EXPIRATION_TIMESTAMP=$(( START_TIMESTAMP + SECONDS_IN_DURATION ))
+                    d=$(date -d "@$EXPIRATION_TIMESTAMP" +"%Y-%m-%d")
+                    t=$(date -d "@$EXPIRATION_TIMESTAMP" +"%H:%M")
+                else
+                    echo -e "\n${RED} ❌ Invalid number of days! Setting to NEVER.${NC}"
+                    sleep 2; d="NEVER"; t="00:00"
+                fi
+            else
+                d="NEVER"; t="00:00"
+            fi
+            
+            useradd -M -s /bin/false "$u" >/dev/null 2>&1
+            echo "$u:$p" | chpasswd >/dev/null 2>&1
+            
+            (
+                flock -x 200
+                echo "$u|$d|$t" >> "$USER_DB"
+            ) 200>"$DB_LOCK"
+
+            clear
+            echo -e "${LINE}\n              ${WHITE}SSH ACCOUNT CREATED${NC}\n${LINE}\n"
+            echo -e " ${BLUE}👤 Username :${NC} ${WHITE}$u${NC}\n ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
+            echo -e " ${BLUE}📅 Expiry   :${NC} ${WHITE}$d${NC}\n ${BLUE}⏰ Time     :${NC} ${WHITE}$t${NC}\n\n${LINE}"
+            echo -e " ${BLUE}📋 Copy     :${NC} ${WHITE}$u:$p${NC}\n${LINE}"
+            pause
+            ;;
+        2)
+            draw_header
+            echo -e "            ${BLUE}CREATE TROJAN ACCOUNT${NC}\n${LINE}"
+            echo -ne " ${BLUE}🔑 Enter Password : ${NC}"
+            read p
+            if [[ -z "$p" ]]; then echo -e "\n${RED} ❌ Password cannot be empty!${NC}"; pause; return; fi
+            if [[ ! "$p" =~ ^[a-zA-Z0-9_@-]+$ ]]; then echo -e "\n${RED} ❌ Invalid Password! Use letters, numbers, _, -, or @.${NC}"; pause; return; fi
+            if grep -q "^$p|" "$TROJAN_DB"; then echo -e "\n${RED} ❌ PASSWORD ALREADY EXISTS!${NC}"; pause; return; fi
+
+            echo -ne " ${BLUE}⏳ Set Expiry Date [Y/N] : ${NC}"
+            read exp_choice
+            if [[ "${exp_choice,,}" == "y" ]]; then
+                echo -ne " ${BLUE}📅 Enter number of days : ${NC}"
+                read CUSTOM_DAYS
+                if [[ "$CUSTOM_DAYS" =~ ^[0-9]+$ ]] && [ "$CUSTOM_DAYS" -gt 0 ]; then
+                    START_TIMESTAMP=$(date +%s)
+                    SECONDS_IN_DURATION=$(( CUSTOM_DAYS * 24 * 60 * 60 ))
+                    EXPIRATION_TIMESTAMP=$(( START_TIMESTAMP + SECONDS_IN_DURATION ))
+                    d=$(date -d "@$EXPIRATION_TIMESTAMP" +"%Y-%m-%d")
+                    t=$(date -d "@$EXPIRATION_TIMESTAMP" +"%H:%M")
+                else
+                    echo -e "\n${RED} ❌ Invalid number of days! Setting to NEVER.${NC}"
+                    sleep 2; d="NEVER"; t="00:00"
+                fi
+            else
+                d="NEVER"; t="00:00"
+            fi
+
+            (
+                flock -x 200
+                echo "$p|$d|$t|ACTIVE" >> "$TROJAN_DB"
+            ) 200>"$DB_LOCK"
+
+            clear
+            echo -e "${LINE}\n            ${WHITE}TROJAN ACCOUNT CREATED${NC}\n${LINE}\n"
+            echo -e " ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
+            echo -e " ${BLUE}📅 Expiry   :${NC} ${WHITE}$d${NC}\n ${BLUE}⏰ Time     :${NC} ${WHITE}$t${NC}\n\n${LINE}"
+            echo -e " ${BLUE}📋 Copy     :${NC} ${WHITE}$p${NC}\n${LINE}"
+
+            sync_trojan_xray
+            pause
+            ;;
+        0) return ;;
+        *) echo -e "\n${RED} ❌ Invalid choice!${NC}"; sleep 1 ;;
+    esac
 }
 
+# =============================================
+# 2. RENEW ACCOUNT (SSH & TROJAN)
+# =============================================
 fun_renew() {
-draw_header
-echo -e " 🔄 ${BLUE}RENEW ACCOUNT${NC}\n${LINE}"
-select_protocol
-case "$proto_choice" in
-1)
-draw_header
-echo -e " 🔄 ${BLUE}RENEW SSH ACCOUNT${NC}\n${LINE}"
-echo -ne " ${BLUE}👤 USERNAME : ${NC}"
-read u
-if [[ -z "$u" ]] || ! grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
+    draw_header
+    echo -e "               🔄 ${BLUE}RENEW ACCOUNT${NC}\n${LINE}"
+    select_protocol
+    case "$proto_choice" in
+        1)
+            draw_header
+            echo -e "            🔄 ${BLUE}RENEW SSH ACCOUNT${NC}\n${LINE}"
+            echo -ne " ${BLUE}👤 USERNAME : ${NC}"
+            read u
+            if [[ -z "$u" ]] || ! grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
 
-echo -ne " ${BLUE}⏳ Set Expiry Date [Y/N] : ${NC}"
-read exp_choice
-if [[ "${exp_choice,,}" == "y" ]]; then
-echo -ne " ${BLUE}📅 Enter number of days to renew : ${NC}"
-read CUSTOM_DAYS
-if [[ "$CUSTOM_DAYS" =~ ^[0-9]+$ ]] && [ "$CUSTOM_DAYS" -gt 0 ]; then
-START_TIMESTAMP=$(date +%s)
-SECONDS_IN_DURATION=$(( CUSTOM_DAYS * 24 * 60 * 60 ))
-EXPIRATION_TIMESTAMP=$(( START_TIMESTAMP + SECONDS_IN_DURATION ))
-d=$(date -d "@$EXPIRATION_TIMESTAMP" +"%Y-%m-%d")
-t=$(date -d "@$EXPIRATION_TIMESTAMP" +"%H:%M")
-else
-echo -e "\n${RED} ❌ Invalid number of days! Setting to NEVER.${NC}"
-sleep 2; d="NEVER"; t="23:59"
-fi
-else
-d="NEVER"; t="00:00"
-fi
-( flock -x 200; sed -i "/^$u|/d" "$USER_DB"; echo "$u|$d|$t" >> "$USER_DB" ) 200>"$DB_LOCK"
-usermod -U "$u" >/dev/null 2>&1
-echo -e "\n${GREEN} ✅ SSH ACCOUNT RENEWED SUCCESSFULLY${NC}"; pause
-;;
-2)
-draw_header
-echo -e " 🔄 ${BLUE}RENEW TROJAN ACCOUNT${NC}\n${LINE}"
-echo -ne " ${BLUE}🔑 PASSWORD : ${NC}"
-read p
-if [[ -z "$p" ]] || ! grep -q "^$p|" "$TROJAN_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
-echo -ne " ${BLUE}⏳ Set Expiry Date [Y/N] : ${NC}"
-read exp_choice
-if [[ "${exp_choice,,}" == "y" ]]; then
-echo -ne " ${BLUE}📅 Enter number of days to renew : ${NC}"
-read CUSTOM_DAYS
-if [[ "$CUSTOM_DAYS" =~ ^[0-9]+$ ]] && [ "$CUSTOM_DAYS" -gt 0 ]; then
-START_TIMESTAMP=$(date +%s)
-SECONDS_IN_DURATION=$(( CUSTOM_DAYS * 24 * 60 * 60 ))
-EXPIRATION_TIMESTAMP=$(( START_TIMESTAMP + SECONDS_IN_DURATION ))
-d=$(date -d "@$EXPIRATION_TIMESTAMP" +"%Y-%m-%d")
-t=$(date -d "@$EXPIRATION_TIMESTAMP" +"%H:%M")
-else
-echo -e "\n${RED} ❌ Invalid number of days! Setting to NEVER.${NC}"
-sleep 2; d="NEVER"; t="23:59"
-fi
-else
-d="NEVER"; t="00:00"
-fi
-( flock -x 200; sed -i "/^$p|/d" "$TROJAN_DB"; echo "$p|$d|$t|ACTIVE" >> "$TROJAN_DB" ) 200>"$DB_LOCK"
-echo -e "\n${GREEN} ✅ TROJAN ACCOUNT RENEWED & UNLOCKED SUCCESSFULLY${NC}"
-sync_trojan_xray
-pause
-;;
-0) return ;;
-*) echo -e "\n${RED} ❌ Invalid choice!${NC}"; sleep 1 ;;
-esac
+            echo -ne " ${BLUE}⏳ Set Expiry Date [Y/N] : ${NC}"
+            read exp_choice
+            if [[ "${exp_choice,,}" == "y" ]]; then
+                echo -ne " ${BLUE}📅 Enter number of days to renew : ${NC}"
+                read CUSTOM_DAYS
+                if [[ "$CUSTOM_DAYS" =~ ^[0-9]+$ ]] && [ "$CUSTOM_DAYS" -gt 0 ]; then
+                    START_TIMESTAMP=$(date +%s)
+                    SECONDS_IN_DURATION=$(( CUSTOM_DAYS * 24 * 60 * 60 ))
+                    EXPIRATION_TIMESTAMP=$(( START_TIMESTAMP + SECONDS_IN_DURATION ))
+                    d=$(date -d "@$EXPIRATION_TIMESTAMP" +"%Y-%m-%d")
+                    t=$(date -d "@$EXPIRATION_TIMESTAMP" +"%H:%M")
+                else
+                    echo -e "\n${RED} ❌ Invalid number of days! Setting to NEVER.${NC}"
+                    sleep 2; d="NEVER"; t="23:59"
+                fi
+            else
+                d="NEVER"; t="00:00"
+            fi
+            
+            (
+                flock -x 200
+                sed -i "/^$u|/d" "$USER_DB"
+                echo "$u|$d|$t" >> "$USER_DB"
+            ) 200>"$DB_LOCK"
+
+            usermod -U "$u" >/dev/null 2>&1
+            echo -e "\n${GREEN} ✅ SSH ACCOUNT RENEWED SUCCESSFULLY${NC}"; pause
+            ;;
+        2)
+            draw_header
+            echo -e "           🔄 ${BLUE}RENEW TROJAN ACCOUNT${NC}\n${LINE}"
+            echo -ne " ${BLUE}🔑 PASSWORD : ${NC}"
+            read p
+            if [[ -z "$p" ]] || ! grep -q "^$p|" "$TROJAN_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
+
+            echo -ne " ${BLUE}⏳ Set Expiry Date [Y/N] : ${NC}"
+            read exp_choice
+            if [[ "${exp_choice,,}" == "y" ]]; then
+                echo -ne " ${BLUE}📅 Enter number of days to renew : ${NC}"
+                read CUSTOM_DAYS
+                if [[ "$CUSTOM_DAYS" =~ ^[0-9]+$ ]] && [ "$CUSTOM_DAYS" -gt 0 ]; then
+                    START_TIMESTAMP=$(date +%s)
+                    SECONDS_IN_DURATION=$(( CUSTOM_DAYS * 24 * 60 * 60 ))
+                    EXPIRATION_TIMESTAMP=$(( START_TIMESTAMP + SECONDS_IN_DURATION ))
+                    d=$(date -d "@$EXPIRATION_TIMESTAMP" +"%Y-%m-%d")
+                    t=$(date -d "@$EXPIRATION_TIMESTAMP" +"%H:%M")
+                else
+                    echo -e "\n${RED} ❌ Invalid number of days! Setting to NEVER.${NC}"
+                    sleep 2; d="NEVER"; t="23:59"
+                fi
+            else
+                d="NEVER"; t="00:00"
+            fi
+
+            (
+                flock -x 200
+                sed -i "/^$p|/d" "$TROJAN_DB"
+                echo "$p|$d|$t|ACTIVE" >> "$TROJAN_DB"
+            ) 200>"$DB_LOCK"
+
+            echo -e "\n${GREEN} ✅ TROJAN ACCOUNT RENEWED & UNLOCKED SUCCESSFULLY${NC}"
+            sync_trojan_xray
+            pause
+            ;;
+        0) return ;;
+        *) echo -e "\n${RED} ❌ Invalid choice!${NC}"; sleep 1 ;;
+    esac
 }
 
+# =============================================
+# 3. DELETE ACCOUNT (SSH & TROJAN)
+# =============================================
 fun_remove() {
-draw_header
-echo -e " 🗑️ ${BLUE}DELETE ACCOUNT${NC}\n${LINE}"
-select_protocol
-case "$proto_choice" in
-1)
-draw_header
-echo -e " 🗑️ ${BLUE}DELETE SSH ACCOUNT${NC}\n${LINE}"
-echo -ne " ${BLUE}👤 USERNAME : ${NC}"
-read u
-if [[ -z "$u" ]] || ! grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
-echo -ne " ${BLUE}⚠️ CONFIRM [Y/N]: ${NC}"
-read c
-if [[ "${c,,}" == "y" ]]; then
-loginctl terminate-user "$u" >/dev/null 2>&1
-pkill -KILL -u "$u" >/dev/null 2>&1
-userdel -f "$u" >/dev/null 2>&1
-( flock -x 200; sed -i "/^$u|/d" "$USER_DB" ) 200>"$DB_LOCK"
-echo -e "\n${RED} 🗑️ SSH ACCOUNT DELETED SUCCESSFULLY${NC}"
-fi
-pause
-;;
-2)
-draw_header
-echo -e " 🗑️ ${BLUE}DELETE TROJAN ACCOUNT${NC}\n${LINE}"
-echo -ne " ${BLUE}🔑 PASSWORD : ${NC}"
-read p
-if [[ -z "$p" ]] || ! grep -q "^$p|" "$TROJAN_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
-echo -ne " ${BLUE}⚠️ CONFIRM [Y/N]: ${NC}"
-read c
-if [[ "${c,,}" == "y" ]]; then
-( flock -x 200; sed -i "/^$p|/d" "$TROJAN_DB" ) 200>"$DB_LOCK"
-echo -e "\n${RED} 🗑️ TROJAN ACCOUNT DELETED SUCCESSFULLY${NC}"
-sync_trojan_xray
-fi
-pause
-;;
-0) return ;;
-*) echo -e "\n${RED} ❌ Invalid choice!${NC}"; sleep 1 ;;
-esac
+    draw_header
+    echo -e "               🗑️ ${BLUE}DELETE ACCOUNT${NC}\n${LINE}"
+    select_protocol
+    case "$proto_choice" in
+        1)
+            draw_header
+            echo -e "            🗑️ ${BLUE}DELETE SSH ACCOUNT${NC}\n${LINE}"
+            echo -ne " ${BLUE}👤 USERNAME : ${NC}"
+            read u
+            if [[ -z "$u" ]] || ! grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
+            echo -ne " ${BLUE}⚠️ CONFIRM [Y/N]: ${NC}"
+            read c
+            if [[ "${c,,}" == "y" ]]; then
+                loginctl terminate-user "$u" >/dev/null 2>&1
+                pkill -KILL -u "$u" >/dev/null 2>&1
+                userdel -f "$u" >/dev/null 2>&1
+                (
+                    flock -x 200
+                    sed -i "/^$u|/d" "$USER_DB"
+                ) 200>"$DB_LOCK"
+                echo -e "\n${RED} 🗑️ SSH ACCOUNT DELETED SUCCESSFULLY${NC}"
+            fi
+            pause
+            ;;
+        2)
+            draw_header
+            echo -e "          🗑️ ${BLUE}DELETE TROJAN ACCOUNT${NC}\n${LINE}"
+            echo -ne " ${BLUE}🔑 PASSWORD : ${NC}"
+            read p
+            if [[ -z "$p" ]] || ! grep -q "^$p|" "$TROJAN_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
+            echo -ne " ${BLUE}⚠️ CONFIRM [Y/N]: ${NC}"
+            read c
+            if [[ "${c,,}" == "y" ]]; then
+                (
+                    flock -x 200
+                    sed -i "/^$p|/d" "$TROJAN_DB"
+                ) 200>"$DB_LOCK"
+                echo -e "\n${RED} 🗑️ TROJAN ACCOUNT DELETED SUCCESSFULLY${NC}"
+                sync_trojan_xray
+            fi
+            pause
+            ;;
+        0) return ;;
+        *) echo -e "\n${RED} ❌ Invalid choice!${NC}"; sleep 1 ;;
+    esac
 }
 
+# =============================================
+# 4. LOCK / UNLOCK ACCOUNT (SSH & TROJAN)
+# =============================================
 fun_lock() {
-draw_header
-echo -e " 🔒 ${BLUE}LOCK/UNLOCK ACCOUNT${NC}\n${LINE}"
-select_protocol
-case "$proto_choice" in
-1)
-draw_header
-echo -e " 🔒 ${BLUE}LOCK/UNLOCK SSH${NC}\n${LINE}"
-echo -ne " ${BLUE}👤 USERNAME : ${NC}"
-read u
-if [[ -z "$u" ]] || ! grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
-echo -e " ${BLUE}[1] LOCK ⛔${NC}\n ${BLUE}[2] UNLOCK 🔓${NC}"
-echo -ne " ${BLUE}SELECT: ${NC}"
-read s
-if [[ "$s" == "1" ]]; then
-usermod -L "$u" >/dev/null 2>&1; loginctl terminate-user "$u" >/dev/null 2>&1; pkill -KILL -u "$u" >/dev/null 2>&1; ps xaf | grep -E 'sshd|dropbear' | grep " $u " | grep -v grep | awk '{print $1}' | xargs -r kill -9 >/dev/null 2>&1
-echo -e "\n${GREEN} ⛔ SSH ACCOUNT LOCKED & DISCONNECTED${NC}"
-else
-usermod -U "$u" >/dev/null 2>&1
-echo -e "\n${GREEN} 🔓 SSH ACCOUNT UNLOCKED${NC}"
-fi
-pause
-;;
-2)
-draw_header
-echo -e " 🔒 ${BLUE}LOCK/UNLOCK TROJAN${NC}\n${LINE}"
-echo -ne " ${BLUE}🔑 PASSWORD : ${NC}"
-read p
-if [[ -z "$p" ]] || ! grep -q "^$p|" "$TROJAN_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
-echo -e " ${BLUE}[1] LOCK ⛔${NC}\n ${BLUE}[2] UNLOCK 🔓${NC}"
-echo -ne " ${BLUE}SELECT: ${NC}"
-read s
-line_data=$(grep "^$p|" "$TROJAN_DB" | head -n 1)
-IFS='|' read -r _ d t _ < <(echo "$line_data")
-if [[ "$s" == "1" ]]; then
-( flock -x 200; sed -i "/^$p|/d" "$TROJAN_DB"; echo "$p|$d|$t|LOCKED" >> "$TROJAN_DB" ) 200>"$DB_LOCK"
-echo -e "\n${GREEN} ⛔ TROJAN ACCOUNT LOCKED & DISCONNECTED${NC}"
-sync_trojan_xray
-else
-( flock -x 200; sed -i "/^$p|/d" "$TROJAN_DB"; echo "$p|$d|$t|ACTIVE" >> "$TROJAN_DB" ) 200>"$DB_LOCK"
-echo -e "\n${GREEN} 🔓 TROJAN ACCOUNT UNLOCKED${NC}"
-sync_trojan_xray
-fi
-pause
-;;
-0) return ;;
-*) echo -e "\n${RED} ❌ Invalid choice!${NC}"; sleep 1 ;;
-esac
+    draw_header
+    echo -e "             🔒 ${BLUE}LOCK/UNLOCK ACCOUNT${NC}\n${LINE}"
+    select_protocol
+    case "$proto_choice" in
+        1)
+            draw_header
+            echo -e "            🔒 ${BLUE}LOCK/UNLOCK SSH${NC}\n${LINE}"
+            echo -ne " ${BLUE}👤 USERNAME : ${NC}"
+            read u
+            if [[ -z "$u" ]] || ! grep -q "^$u|" "$USER_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
+            echo -e " ${BLUE}[1] LOCK ⛔${NC}\n ${BLUE}[2] UNLOCK 🔓${NC}"
+            echo -ne " ${BLUE}SELECT: ${NC}"
+            read s
+            if [[ "$s" == "1" ]]; then
+                usermod -L "$u" >/dev/null 2>&1; loginctl terminate-user "$u" >/dev/null 2>&1; pkill -KILL -u "$u" >/dev/null 2>&1; ps xaf | grep -E 'sshd|dropbear' | grep " $u " | grep -v grep | awk '{print $1}' | xargs -r kill -9 >/dev/null 2>&1
+                echo -e "\n${GREEN} ⛔ SSH ACCOUNT LOCKED & DISCONNECTED${NC}"
+            else
+                usermod -U "$u" >/dev/null 2>&1
+                echo -e "\n${GREEN} 🔓 SSH ACCOUNT UNLOCKED${NC}"
+            fi
+            pause
+            ;;
+        2)
+            draw_header
+            echo -e "          🔒 ${BLUE}LOCK/UNLOCK TROJAN${NC}\n${LINE}"
+            echo -ne " ${BLUE}🔑 PASSWORD : ${NC}"
+            read p
+            if [[ -z "$p" ]] || ! grep -q "^$p|" "$TROJAN_DB"; then echo -e "\n${RED} ❌ NOT FOUND!${NC}"; pause; return; fi
+            echo -e " ${BLUE}[1] LOCK ⛔${NC}\n ${BLUE}[2] UNLOCK 🔓${NC}"
+            echo -ne " ${BLUE}SELECT: ${NC}"
+            read s
+            line_data=$(grep "^$p|" "$TROJAN_DB" | head -n 1)
+            IFS='|' read -r _ d t _ <<< "$line_data"
+            if [[ "$s" == "1" ]]; then
+                (
+                    flock -x 200
+                    sed -i "/^$p|/d" "$TROJAN_DB"
+                    echo "$p|$d|$t|LOCKED" >> "$TROJAN_DB"
+                ) 200>"$DB_LOCK"
+                echo -e "\n${GREEN} ⛔ TROJAN ACCOUNT LOCKED & DISCONNECTED${NC}"
+                sync_trojan_xray
+            else
+                (
+                    flock -x 200
+                    sed -i "/^$p|/d" "$TROJAN_DB"
+                    echo "$p|$d|$t|ACTIVE" >> "$TROJAN_DB"
+                ) 200>"$DB_LOCK"
+                echo -e "\n${GREEN} 🔓 TROJAN ACCOUNT UNLOCKED${NC}"
+                sync_trojan_xray
+            fi
+            pause
+            ;;
+        0) return ;;
+        *) echo -e "\n${RED} ❌ Invalid choice!${NC}"; sleep 1 ;;
+    esac
 }
 
+# =============================================
+# 5. LIST ACCOUNTS (SSH & TROJAN)
+# =============================================
 fun_list() {
-draw_header
-echo -e " 📋 ${BLUE}LIST ACCOUNTS${NC}\n${LINE}"
-echo -e " ${BLUE}[1] SSH ACCOUNTS${NC}"
-echo -e " ${BLUE}[2] TROJAN ACCOUNTS${NC}"
-echo -e " ${BLUE}[3] LIST ALL SSH & TROJAN${NC}"
-echo -e " ${BLUE}[0] BACK${NC}\n${LINE}"
-echo -ne " ${BLUE}SELECT: ${NC}"
-read l_choice
+    draw_header
+    echo -e "               📋 ${BLUE}LIST ACCOUNTS${NC}\n${LINE}"
+    echo -e "  ${BLUE}[1] SSH ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[2] TROJAN ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[3] LIST ALL SSH & TROJAN${NC}"
+    echo -e "  ${BLUE}[0] BACK${NC}\n${LINE}"
+    echo -ne "  ${BLUE}SELECT: ${NC}"
+    read l_choice
 
-clear
-if [[ "$l_choice" == "1" || "$l_choice" == "3" ]]; then
-echo -e "${LINE}\n ${BLUE}SSH ACCOUNTS LIST${NC}\n${LINE}"
-SHADOW_CACHE=$(cat /etc/shadow 2>/dev/null)
-while IFS='|' read -r u d t rest; do
-[[ -z "$u" ]] && continue
-if id "$u" &>/dev/null; then
-if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
-if echo "$SHADOW_CACHE" | grep -q "^${u}:!"; then LOCK_STAT="⛔"; else LOCK_STAT="🟢"; fi
-printf " ${BLUE}👤 %-15s${NC} %s ${BLUE}📅 %s${NC}\n" "$u" "$LOCK_STAT" "$DATE_STR"
-fi
-done < "$USER_DB"
-echo -e "${LINE}"
-fi
-if [[ "$l_choice" == "2" || "$l_choice" == "3" ]]; then
-echo -e "\n${LINE}\n ${BLUE}TROJAN ACCOUNTS LIST${NC}\n${LINE}"
-while IFS='|' read -r p d t st rest; do
-[[ -z "$p" ]] && continue
-if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
-if [[ "$st" == "LOCKED" || "$d" == "EXPIRED" ]]; then LOCK_STAT="⛔"; else LOCK_STAT="🟢"; fi
-printf " ${BLUE}🔑 %-15s${NC} %s ${BLUE}📅 %s${NC}\n" "$p" "$LOCK_STAT" "$DATE_STR"
-done < "$TROJAN_DB"
-echo -e "${LINE}"
-fi
-[[ "$l_choice" != "0" ]] && pause
+    clear
+    if [[ "$l_choice" == "1" || "$l_choice" == "3" ]]; then
+        echo -e "${LINE}\n            ${BLUE}SSH ACCOUNTS LIST${NC}\n${LINE}"
+        SHADOW_CACHE=$(cat /etc/shadow 2>/dev/null)
+        while IFS='|' read -r u d t rest; do
+            [[ -z "$u" ]] && continue
+            if id "$u" &>/dev/null; then
+                 if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
+                 if echo "$SHADOW_CACHE" | grep -q "^${u}:!"; then LOCK_STAT="⛔"; else LOCK_STAT="🟢"; fi
+                 printf " ${BLUE}👤 %-15s${NC} %s ${BLUE}📅 %s${NC}\n" "$u" "$LOCK_STAT" "$DATE_STR"
+            fi
+        done < "$USER_DB"
+        echo -e "${LINE}"
+    fi
+
+    if [[ "$l_choice" == "2" || "$l_choice" == "3" ]]; then
+        echo -e "\n${LINE}\n          ${BLUE}TROJAN ACCOUNTS LIST${NC}\n${LINE}"
+        while IFS='|' read -r p d t st rest; do
+            [[ -z "$p" ]] && continue
+            if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
+            if [[ "$st" == "LOCKED" || "$d" == "EXPIRED" ]]; then LOCK_STAT="⛔"; else LOCK_STAT="🟢"; fi
+            printf " ${BLUE}🔑 %-15s${NC} %s ${BLUE}📅 %s${NC}\n" "$p" "$LOCK_STAT" "$DATE_STR"
+        done < "$TROJAN_DB"
+        echo -e "${LINE}"
+    fi
+    [[ "$l_choice" != "0" ]] && pause
 }
 
+# =============================================
+# 6. SEARCH ACCOUNT (SSH & TROJAN)
+# =============================================
 fun_search() {
-clear
-echo -e "${LINE}\n 🔍 ${BLUE}SEARCH ACCOUNT${NC}\n${LINE}"
-echo -ne " ${BLUE}🔍 Enter Username or Trojan Password : ${NC}"
-read search_q
+    clear
+    echo -e "${LINE}\n               🔍 ${BLUE}SEARCH ACCOUNT${NC}\n${LINE}"
+    echo -ne " ${BLUE}🔍 Enter Username or Trojan Password : ${NC}"
+    read search_q
+    
+    if [[ -z "$search_q" ]]; then 
+        echo -e "\n${RED} ❌ Search cannot be empty!${NC}"
+        pause; return
+    fi
 
-if [[ -z "$search_q" ]]; then echo -e "\n${RED} ❌ Search cannot be empty!${NC}"; pause; return; fi
-ssh_results=$(grep -i "$search_q" "$USER_DB" 2>/dev/null)
-trj_results=$(grep -i "$search_q" "$TROJAN_DB" 2>/dev/null)
-if [[ -z "$ssh_results" && -z "$trj_results" ]]; then
-echo -e "\n${RED} ❌ NO ACCOUNT FOUND MATCHING: ${WHITE}$search_q${NC}"
-else
-echo -e "\n${GREEN} ✅ RESULTS FOUND:${NC}\n${LINE}"
-SHADOW_CACHE=$(cat /etc/shadow 2>/dev/null)
-if [[ -n "$ssh_results" ]]; then
-while IFS='|' read -r u d t rest; do
-[[ -z "$u" ]] && continue
-if id "$u" &>/dev/null; then
-if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
-if echo "$SHADOW_CACHE" | grep -q "^${u}:!"; then LOCK_STAT="${RED}⛔ LOCKED (EXPIRED OR BANNED)${NC}"; else LOCK_STAT="${GREEN}🟢 ACTIVE${NC}"; fi
-echo -e " ${CYAN}[SSH]${NC}"
-echo -e " ${BLUE}👤 Username :${NC} ${WHITE}$u${NC}"
-echo -e " ${BLUE}📊 Status :${NC} $LOCK_STAT"
-echo -e " ${BLUE}📅 Expiry :${NC} ${WHITE}$DATE_STR${NC}"
-echo -e "${LINE}"
-fi
-done < <(echo "$ssh_results")
-fi
-if [[ -n "$trj_results" ]]; then
-while IFS='|' read -r p d t st rest; do
-[[ -z "$p" ]] && continue
-if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
-if [[ "$st" == "LOCKED" || "$d" == "EXPIRED" ]]; then LOCK_STAT="${RED}⛔ LOCKED (EXPIRED OR BANNED)${NC}"; else LOCK_STAT="${GREEN}🟢 ACTIVE${NC}"; fi
-echo -e " ${YELLOW}[TROJAN]${NC}"
-echo -e " ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
-echo -e " ${BLUE}📊 Status :${NC} $LOCK_STAT"
-echo -e " ${BLUE}📅 Expiry :${NC} ${WHITE}$DATE_STR${NC}"
-echo -e "${LINE}"
-done < <(echo "$trj_results")
-fi
-fi
-pause
+    ssh_results=$(grep -i "$search_q" "$USER_DB" 2>/dev/null)
+    trj_results=$(grep -i "$search_q" "$TROJAN_DB" 2>/dev/null)
+    
+    if [[ -z "$ssh_results" && -z "$trj_results" ]]; then
+        echo -e "\n${RED} ❌ NO ACCOUNT FOUND MATCHING: ${WHITE}$search_q${NC}"
+    else
+        echo -e "\n${GREEN} ✅ RESULTS FOUND:${NC}\n${LINE}"
+        SHADOW_CACHE=$(cat /etc/shadow 2>/dev/null)
+        
+        if [[ -n "$ssh_results" ]]; then
+            while IFS='|' read -r u d t rest; do
+                [[ -z "$u" ]] && continue
+                if id "$u" &>/dev/null; then
+                     if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
+                     if echo "$SHADOW_CACHE" | grep -q "^${u}:!"; then 
+                         LOCK_STAT="${RED}⛔ LOCKED (EXPIRED OR BANNED)${NC}"
+                     else 
+                         LOCK_STAT="${GREEN}🟢 ACTIVE${NC}"
+                     fi
+                     echo -e " ${CYAN}[SSH]${NC}"
+                     echo -e " ${BLUE}👤 Username :${NC} ${WHITE}$u${NC}"
+                     echo -e " ${BLUE}📊 Status   :${NC} $LOCK_STAT"
+                     echo -e " ${BLUE}📅 Expiry   :${NC} ${WHITE}$DATE_STR${NC}"
+                     echo -e "${LINE}"
+                fi
+            done <<< "$ssh_results"
+        fi
+
+        if [[ -n "$trj_results" ]]; then
+            while IFS='|' read -r p d t st rest; do
+                [[ -z "$p" ]] && continue
+                if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
+                if [[ "$st" == "LOCKED" || "$d" == "EXPIRED" ]]; then 
+                    LOCK_STAT="${RED}⛔ LOCKED (EXPIRED OR BANNED)${NC}"
+                else 
+                    LOCK_STAT="${GREEN}🟢 ACTIVE${NC}"
+                fi
+                echo -e " ${YELLOW}[TROJAN]${NC}"
+                echo -e " ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
+                echo -e " ${BLUE}📊 Status   :${NC} $LOCK_STAT"
+                echo -e " ${BLUE}📅 Expiry   :${NC} ${WHITE}$DATE_STR${NC}"
+                echo -e "${LINE}"
+            done <<< "$trj_results"
+        fi
+    fi
+    pause
 }
 
+# =============================================
+# 7. LIVE MONITOR (SSH & TROJAN) WITH COUNTS
+# =============================================
 fun_monitor_view() {
-draw_header
-echo -e " 👁 ${BLUE}LIVE SSH & TROJAN MONITOR${NC}\n${LINE}"
-echo -e " ${BLUE}[1] LIVE SSH ACCOUNTS${NC}"
-echo -e " ${BLUE}[2] LIVE TROJAN ACCOUNTS${NC}"
-echo -e " ${BLUE}[3] LIVE SSH • TROJAN ACCOUNTS${NC}"
-echo -e " ${BLUE}[0] BACK${NC}\n${LINE}"
-echo -ne " ${BLUE}SELECT: ${NC}"
-read m_choice
+    draw_header
+    echo -e "         👁 ${BLUE}LIVE SSH & TROJAN MONITOR${NC}\n${LINE}"
+    echo -e "  ${BLUE}[1] LIVE SSH ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[2] LIVE TROJAN ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[3] LIVE SSH • TROJAN ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[0] BACK${NC}\n${LINE}"
+    echo -ne "  ${BLUE}SELECT: ${NC}"
+    read m_choice
 
-if [[ "$m_choice" == "0" ]]; then return; fi
-clear
-echo -e "${LINE}\n ${BLUE}======= 👁 LIVE MONITOR =======${NC}\n${LINE}"
-if [[ "$m_choice" == "1" || "$m_choice" == "3" ]]; then
-echo -e " ${CYAN} [ SSH ACCOUNTS ]${NC}"
-ACTIVE_USERS_DATA=$(ps -axo user:32,comm 2>/dev/null | grep -E 'sshd|dropbear' | awk '{print $1}' | sort | uniq -c)
-while IFS='|' read -r u d t rest; do
-[[ -z "$u" ]] && continue
-if id "$u" &>/dev/null; then
-USER_CONN_COUNT=$(echo "$ACTIVE_USERS_DATA" | grep -w "$u" | awk '{print $1}')
-if [[ -n "$USER_CONN_COUNT" && "$USER_CONN_COUNT" -gt 0 ]]; then
-STATUS="${GREEN}🟢 ONLINE [ ${USER_CONN_COUNT} ]${NC}"
-else
-STATUS="${RED}🔴 OFFLINE${NC}"
-fi
-printf " ${BLUE}👤 %-16s${NC} %s\n" "$u" "$STATUS"
-fi
-done < "$USER_DB"
-echo -e "${LINE}"
-fi
-if [[ "$m_choice" == "2" || "$m_choice" == "3" ]]; then
-echo -e " ${YELLOW} [ TROJAN ACCOUNTS ]${NC}"
-TROJAN_COUNTS_JSON=$(get_trojan_online_counts)
-while IFS='|' read -r p d t st rest; do
-[[ -z "$p" ]] && continue
-TRJ_COUNT=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get(sys.argv[2], 0))" "$TROJAN_COUNTS_JSON" "$p" 2>/dev/null)
-if [[ -n "$TRJ_COUNT" && "$TRJ_COUNT" -gt 0 ]]; then
-STATUS="${GREEN}🟢 ONLINE [ ${TRJ_COUNT} ]${NC}"
-else
-STATUS="${RED}🔴 OFFLINE${NC}"
-fi
-printf " ${BLUE}🔑 %-16s${NC} %s\n" "$p" "$STATUS"
-done < "$TROJAN_DB"
-echo -e "${LINE}"
-fi
-pause
+    if [[ "$m_choice" == "0" ]]; then
+        return
+    fi
+
+    clear
+    echo -e "${LINE}\n   ${BLUE}======= 👁 LIVE MONITOR =======${NC}\n${LINE}"
+
+    if [[ "$m_choice" == "1" || "$m_choice" == "3" ]]; then
+        echo -e " ${CYAN} [  SSH ACCOUNTS  ]${NC}"
+        ACTIVE_USERS_DATA=$(ps -axo user:32,comm 2>/dev/null | grep -E 'sshd|dropbear' | awk '{print $1}' | sort | uniq -c)
+        while IFS='|' read -r u d t rest; do
+            [[ -z "$u" ]] && continue
+            if id "$u" &>/dev/null; then
+                 USER_CONN_COUNT=$(echo "$ACTIVE_USERS_DATA" | grep -w "$u" | awk '{print $1}')
+                 if [[ -n "$USER_CONN_COUNT" && "$USER_CONN_COUNT" -gt 0 ]]; then
+                     STATUS="${GREEN}🟢 ONLINE [ ${USER_CONN_COUNT} ]${NC}"
+                 else
+                     STATUS="${RED}🔴 OFFLINE${NC}"
+                 fi
+                 printf " ${BLUE}👤 %-16s${NC} %s\n" "$u" "$STATUS"
+            fi
+        done < "$USER_DB"
+        echo -e "${LINE}"
+    fi
+
+    if [[ "$m_choice" == "2" || "$m_choice" == "3" ]]; then
+        echo -e " ${YELLOW} [  TROJAN ACCOUNTS  ]${NC}"
+        TROJAN_COUNTS_JSON=$(get_trojan_online_counts)
+
+        while IFS='|' read -r p d t st rest; do
+            [[ -z "$p" ]] && continue
+            TRJ_COUNT=$(python3 -c "import json, sys; d=json.loads(sys.argv[1]); print(d.get(sys.argv[2], 0))" "$TROJAN_COUNTS_JSON" "$p" 2>/dev/null)
+            if [[ -n "$TRJ_COUNT" && "$TRJ_COUNT" -gt 0 ]]; then
+                STATUS="${GREEN}🟢 ONLINE [ ${TRJ_COUNT} ]${NC}"
+            else
+                STATUS="${RED}🔴 OFFLINE${NC}"
+            fi
+            printf " ${BLUE}🔑 %-16s${NC} %s\n" "$p" "$STATUS"
+        done < "$TROJAN_DB"
+        echo -e "${LINE}"
+    fi
+    
+    pause
 }
 
+# =============================================
+# 8. BACKUP & MIGRATION (SSH & TROJAN)
+# =============================================
 fun_backup() {
-draw_header
-echo -e " 💾 ${BLUE}BACKUP DATA${NC}\n${LINE}"
-cp "$USER_DB" "$BACKUP_DIR/ssh_backup_$(date +%F).txt"
-cp "$TROJAN_DB" "$BACKUP_DIR/trojan_backup_$(date +%F).txt"
-echo -e "${GREEN} ✅ SSH & TROJAN BACKUPS SAVED IN $BACKUP_DIR${NC}"; pause
+    draw_header
+    echo -e "               💾 ${BLUE}BACKUP DATA${NC}\n${LINE}"
+    cp "$USER_DB" "$BACKUP_DIR/ssh_backup_$(date +%F).txt"
+    cp "$TROJAN_DB" "$BACKUP_DIR/trojan_backup_$(date +%F).txt"
+    echo -e "${GREEN} ✅ SSH & TROJAN BACKUPS SAVED IN $BACKUP_DIR${NC}"; pause
 }
 
 fun_export_users() {
-draw_header; echo -e "${BLUE} 📤 EXPORTING SSH & TROJAN USERS...${NC}"
-cp "$USER_DB" "$MIGRATION_FILE"
-cp "$TROJAN_DB" "$MIGRATION_TROJAN"
-echo -e "${GREEN} ✅ EXPORT SUCCESSFUL!${NC}"
-echo -e " SSH FILE : $MIGRATION_FILE"
-echo -e " TROJAN FILE : $MIGRATION_TROJAN"
-pause
+    draw_header; echo -e "${BLUE} 📤 EXPORTING SSH & TROJAN USERS...${NC}"
+    cp "$USER_DB" "$MIGRATION_FILE"
+    cp "$TROJAN_DB" "$MIGRATION_TROJAN"
+    echo -e "${GREEN} ✅ EXPORT SUCCESSFUL!${NC}"
+    echo -e " SSH FILE    : $MIGRATION_FILE"
+    echo -e " TROJAN FILE : $MIGRATION_TROJAN"
+    pause
 }
 
 fun_import_users() {
-draw_header; echo -e "${BLUE} 📥 RESTORING USERS...${NC}"
-count_ssh=0
-count_trj=0
-if [[ -f "$MIGRATION_FILE" ]]; then
-while IFS='|' read -r u d t rest; do
-[[ -z "$u" ]] && continue
-if ! id "$u" &>/dev/null; then
-useradd -M -s /bin/false "$u" >/dev/null 2>&1; echo "$u:12345" | chpasswd >/dev/null 2>&1
-echo -e " CREATED SSH: ${GREEN}$u${NC}"; ((count_ssh++))
-fi
-done < "$MIGRATION_FILE"
-( flock -x 200; cat "$MIGRATION_FILE" > "$USER_DB" ) 200>"$DB_LOCK"
-fi
+    draw_header; echo -e "${BLUE} 📥 RESTORING USERS...${NC}"
+    count_ssh=0
+    count_trj=0
+    if [[ -f "$MIGRATION_FILE" ]]; then
+        while IFS='|' read -r u d t rest; do
+            [[ -z "$u" ]] && continue
+            if ! id "$u" &>/dev/null; then
+                useradd -M -s /bin/false "$u" >/dev/null 2>&1; echo "$u:12345" | chpasswd >/dev/null 2>&1
+                echo -e " CREATED SSH: ${GREEN}$u${NC}"; ((count_ssh++))
+            fi
+        done < "$MIGRATION_FILE"
+        (
+            flock -x 200
+            cat "$MIGRATION_FILE" > "$USER_DB"
+        ) 200>"$DB_LOCK"
+    fi
 
-if [[ -f "$MIGRATION_TROJAN" ]]; then
-( flock -x 200; cat "$MIGRATION_TROJAN" > "$TROJAN_DB" ) 200>"$DB_LOCK"
-count_trj=$(wc -l < "$TROJAN_DB")
-sync_trojan_xray
-fi
-echo -e "\n${GREEN} ✅ RESTORED: $count_ssh SSH USERS & $count_trj TROJAN USERS${NC}"; pause
+    if [[ -f "$MIGRATION_TROJAN" ]]; then
+        (
+            flock -x 200
+            cat "$MIGRATION_TROJAN" > "$TROJAN_DB"
+        ) 200>"$DB_LOCK"
+        count_trj=$(wc -l < "$TROJAN_DB")
+        sync_trojan_xray
+    fi
+
+    echo -e "\n${GREEN} ✅ RESTORED: $count_ssh SSH USERS & $count_trj TROJAN USERS${NC}"; pause
 }
 
+# =============================================
+# 9. EXPIRED ACCOUNTS LOG
+# =============================================
 fun_violations() {
-clear
-echo -e "${LINE}\n 🔔 ${BLUE}ALERTS LOG (EXPIRED LOGS)${NC}\n${LINE}\n"
-if [ -f "$LOG_FILE" ]; then
-ALERTS=$(grep "ACCOUNT EXPIRED" "$LOG_FILE" | tail -n 20)
-if [[ -z "$ALERTS" ]]; then echo -e " ${GREEN}✅ NO EXPIRED ACCOUNTS DETECTED YET.${NC}"
-else
-while read -r line; do echo -e " ${YELLOW}🕒 $line${NC}"; done < <(echo "$ALERTS")
-fi
-else
-echo -e " ${YELLOW}LOG FILE IS EMPTY.${NC}"
-fi
-echo -e "\n${LINE}"; pause
+    clear
+    echo -e "${LINE}\n         🔔 ${BLUE}ALERTS LOG (EXPIRED LOGS)${NC}\n${LINE}\n"
+    if [ -f "$LOG_FILE" ]; then
+        ALERTS=$(grep "ACCOUNT EXPIRED" "$LOG_FILE" | tail -n 20)
+        if [[ -z "$ALERTS" ]]; then echo -e " ${GREEN}✅ NO EXPIRED ACCOUNTS DETECTED YET.${NC}"
+        else
+            while read -r line; do echo -e " ${YELLOW}🕒 $line${NC}"; done <<< "$ALERTS"
+        fi
+    else
+        echo -e " ${YELLOW}LOG FILE IS EMPTY.${NC}"
+    fi
+    echo -e "\n${LINE}"; pause
 }
 
+# =============================================
+# TELEGRAM BOT INSTALLER (SSH & TROJAN SUPPORT)
+# =============================================
 fun_install_bot() {
-clear; echo -e "${BLUE}INSTALLING SECURE BOT ENVIRONMENT...${NC}"
-echo -ne " ${BLUE}🤖 Enter your Telegram Bot Token: ${NC}"
-read -r input_token
-if [[ -z "$input_token" ]]; then echo -e "${RED}❌ Token cannot be empty! Installation aborted.${NC}"; pause; return; fi
-echo -ne " ${BLUE}👤 Enter your Telegram Admin ID: ${NC}"
-read -r input_id
-if [[ -z "$input_id" ]]; then echo -e "${RED}❌ Admin ID cannot be empty! Installation aborted.${NC}"; pause; return; fi
-pkill -f ssh_bot.py 2>/dev/null
-systemctl stop sshbot >/dev/null 2>&1
-echo -e "${YELLOW}⚙️ Installing Python dependencies in Secure VENV...${NC}"
-$PIP_BIN install urllib3==1.26.15 python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
-echo "BOT_TOKEN=\"$input_token\"" > "$BOT_CONF"
-echo "ADMIN_ID=\"$input_id\"" >> "$BOT_CONF"
-echo "ALERTS=\"ON\"" >> "$BOT_CONF"
-chmod 600 "$BOT_CONF"
-cat > /root/ssh_bot.py << 'EOF'
+    clear; echo -e "${BLUE}INSTALLING SECURE BOT ENVIRONMENT...${NC}"
+    
+    echo -ne " ${BLUE}🤖 Enter your Telegram Bot Token: ${NC}"
+    read -r input_token
+    if [[ -z "$input_token" ]]; then
+        echo -e "${RED}❌ Token cannot be empty! Installation aborted.${NC}"; pause; return
+    fi
+    
+    echo -ne " ${BLUE}👤 Enter your Telegram Admin ID: ${NC}"
+    read -r input_id
+    if [[ -z "$input_id" ]]; then
+        echo -e "${RED}❌ Admin ID cannot be empty! Installation aborted.${NC}"; pause; return
+    fi
+
+    pkill -f ssh_bot.py 2>/dev/null
+    systemctl stop sshbot >/dev/null 2>&1
+    
+    echo -e "${YELLOW}⚙️ Installing Python dependencies in Secure VENV...${NC}"
+    $PIP_BIN install urllib3==1.26.15 python-telegram-bot==13.7 schedule requests >/dev/null 2>&1
+    
+    echo "BOT_TOKEN=\"$input_token\"" > "$BOT_CONF"
+    echo "ADMIN_ID=\"$input_id\"" >> "$BOT_CONF"
+    echo "ALERTS=\"ON\"" >> "$BOT_CONF"
+    chmod 600 "$BOT_CONF"
+    
+    cat > /root/ssh_bot.py << 'EOF'
 import logging, os, subprocess, re, fcntl, datetime, json
 from telegram import InlineKeyboardButton, InlineKeyboardMarkup, Update, ParseMode
 from telegram.ext import Updater, CommandHandler, CallbackQueryHandler, MessageHandler, Filters, CallbackContext
@@ -913,9 +1059,9 @@ def get_trojan_counts():
     try:
         with open(XRAY_CONF, "r") as f:
             xcfg = json.load(f)
-            for ib in xcfg.get("inbounds", []):
-                if ib.get("protocol") == "trojan":
-                    xray_port = ib.get("port", 2000)
+        for ib in xcfg.get("inbounds", []):
+            if ib.get("protocol") == "trojan":
+                xray_port = ib.get("port", 2000)
     except: pass
 
     try:
@@ -992,7 +1138,7 @@ def get_back_btn():
 
 def start(u, c):
     if u.effective_user.id == ADMIN_ID:
-        u.message.reply_text("⚡ SSH & TROJAN MANAGER V10", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+        u.message.reply_text("⚡ <b>SSH & TROJAN MANAGER V10</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
 
 def btn(u, c):
     q = u.callback_query; q.answer(); d = q.data
@@ -1002,12 +1148,15 @@ def btn(u, c):
         return
     if d == 'back':
         c.user_data.clear()
-        q.edit_message_text("⚡ SSH & TROJAN MANAGER V10", parse_mode=ParseMode.HTML, reply_markup=get_menu())
+        q.edit_message_text("⚡ <b>SSH & TROJAN MANAGER V10</b>", parse_mode=ParseMode.HTML, reply_markup=get_menu())
         return
     try:
+        # Protocol Selection Menus
         if d in ['proto_add', 'proto_ren', 'proto_del', 'proto_lock']:
             act_map = {'proto_add': 'add', 'proto_ren': 'ren', 'proto_del': 'del', 'proto_lock': 'lock'}
-            q.edit_message_text("🔀 Select Protocol:", parse_mode=ParseMode.HTML, reply_markup=get_proto_kb(act_map[d]))
+            q.edit_message_text("🔀 <b>Select Protocol:</b>", parse_mode=ParseMode.HTML, reply_markup=get_proto_kb(act_map[d]))
+
+        # CREATE FLOW
         elif d == 'add_ssh':
             c.user_data['proto'] = 'ssh'; c.user_data['act'] = 'add_u'
             q.edit_message_text("🛡️ <b>[SSH] Send the New Username:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
@@ -1030,7 +1179,7 @@ def btn(u, c):
                         f.write(f"{pwd}|{dt}|{tm}|ACTIVE\n")
                     fcntl.flock(lock_f, fcntl.LOCK_UN)
                 sync_xray()
-                resp = f"<b>{TLINE}</b>\n <b>TROJAN CREATED</b> \n<b>{TLINE}</b>\n\n🔑 Password : <code>{pwd}</code>\n📅 Expiry : <code>{dt}</code>\n⏰ Time : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy : <code>{pwd}</code>\n<b>{TLINE}</b>"
+                resp = f"<b>{TLINE}</b>\n       <b>TROJAN CREATED</b>       \n<b>{TLINE}</b>\n\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{dt}</code>\n⏰ Time     : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{pwd}</code>\n<b>{TLINE}</b>"
             else:
                 usr = c.user_data['u']; pwd = c.user_data['p']
                 subprocess.run(["useradd", "-M", "-s", "/bin/false", usr], stdout=subprocess.DEVNULL)
@@ -1040,9 +1189,11 @@ def btn(u, c):
                     with open(DB_FILE, 'a') as f:
                         f.write(f"{usr}|{dt}|{tm}\n")
                     fcntl.flock(lock_f, fcntl.LOCK_UN)
-                resp = f"<b>{TLINE}</b>\n <b>SSH CREATED</b> \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry : <code>{dt}</code>\n⏰ Time : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>"
+                resp = f"<b>{TLINE}</b>\n         <b>SSH CREATED</b>         \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{dt}</code>\n⏰ Time     : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>"
             q.edit_message_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             c.user_data.clear()
+
+        # RENEW FLOW
         elif d == 'ren_ssh':
             c.user_data['proto'] = 'ssh'; c.user_data['act'] = 'r_user'
             q.edit_message_text("🔄 <b>[SSH] Enter Username to Renew:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
@@ -1073,6 +1224,8 @@ def btn(u, c):
                     fcntl.flock(lock_f, fcntl.LOCK_UN)
                 subprocess.run(["usermod", "-U", usr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             q.edit_message_text(f"✅ <b>RENEWED & UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+
+        # DELETE FLOW
         elif d == 'del_ssh':
             c.user_data['proto'] = 'ssh'; c.user_data['act'] = 'd1'
             q.edit_message_text("🗑️ <b>[SSH] Enter Username to Delete:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
@@ -1104,6 +1257,8 @@ def btn(u, c):
                 q.edit_message_text(f"🗑️ <b>DELETED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif d == 'del_no':
             q.edit_message_text("❌ <b>Deletion Cancelled.</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+
+        # LOCK/UNLOCK FLOW
         elif d == 'lock_ssh':
             c.user_data['proto'] = 'ssh'; c.user_data['act'] = 'lu_user'
             q.edit_message_text("🔒/🔓 <b>[SSH] Enter Username:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
@@ -1148,9 +1303,11 @@ def btn(u, c):
             else:
                 subprocess.run(["usermod", "-U", usr], stdout=subprocess.DEVNULL)
             q.edit_message_text(f"🔓 <b>UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+
         elif d == 'search_menu':
             c.user_data['act'] = 'search_u'
             q.edit_message_text("🔍 <b>Enter SSH Username or Trojan Password:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+
         elif d == 'list':
             try: shadow_data = open('/etc/shadow', 'r').read()
             except: shadow_data = ""
@@ -1170,18 +1327,21 @@ def btn(u, c):
                         date_str = p[1] if p[1] in ["NEVER", "EXPIRED"] else f"{p[1]} {p[2]}"
                         lock_icon = " ⛔" if (st == "LOCKED" or p[1] == "EXPIRED") else " 🟢"
                         items.append(f"⚡ [TRJ] 🔑 <code>{p[0]}</code>{lock_icon}\n📅 <code>{date_str}</code>\n\n")
+
             if not items:
                 q.edit_message_text("No accounts found.", reply_markup=get_back_btn())
                 return
+
             chunk_size = 40
             chunks = [items[i:i + chunk_size] for i in range(0, len(items), chunk_size)]
             for idx, chunk in enumerate(chunks):
-                header = f"<b>{TLINE}</b>\n <b>ALL ACCOUNTS ({idx+1}/{len(chunks)})</b>\n<b>{TLINE}</b>\n\n"
+                header = f"<b>{TLINE}</b>\n      <b>ALL ACCOUNTS ({idx+1}/{len(chunks)})</b>\n<b>{TLINE}</b>\n\n"
                 body = header + "".join(chunk)
                 if idx == 0:
                     q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if len(chunks) == 1 else None)
                 else:
                     c.bot.send_message(chat_id=u.effective_chat.id, text=body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn() if idx == len(chunks) - 1 else None)
+
         elif d == 'onl':
             ssh_counts = {}
             try:
@@ -1189,7 +1349,9 @@ def btn(u, c):
                 for u_name in ps_out:
                     ssh_counts[u_name] = ssh_counts.get(u_name, 0) + 1
             except: pass
+
             trj_counts = get_trojan_counts()
+
             items = []
             if os.path.exists(DB_FILE):
                 for l in open(DB_FILE):
@@ -1205,11 +1367,14 @@ def btn(u, c):
                         cnt = trj_counts.get(p[0], 0)
                         st = f"🟢 ONLINE [ {cnt} ]" if cnt > 0 else "🔴 OFFLINE"
                         items.append(f"⚡ [TRJ] 🔑 <code>{p[0]}</code> : {st}\n")
+
             if not items:
                 q.edit_message_text("No accounts found.", reply_markup=get_back_btn())
                 return
-            body = f"<b>{TLINE}</b>\n <b>LIVE MONITOR</b> \n<b>{TLINE}</b>\n\n" + "".join(items[:80])
+
+            body = f"<b>{TLINE}</b>\n        <b>LIVE MONITOR</b>        \n<b>{TLINE}</b>\n\n" + "".join(items[:80])
             q.edit_message_text(body, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+
         elif d == 'alerts':
             if os.path.exists(LOG_FILE):
                 alerts_raw = subprocess.getoutput(f"grep 'ACCOUNT EXPIRED' {LOG_FILE} | tail -n 15")
@@ -1217,6 +1382,7 @@ def btn(u, c):
             else:
                 msg = "⚠️ <b>LOG FILE IS EMPTY.</b>"
             q.edit_message_text(msg, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+
         elif d == 'bak':
             if os.path.exists(DB_FILE): c.bot.send_document(ADMIN_ID, open(DB_FILE, 'rb'), caption="🛡️ SSH DB Backup")
             if os.path.exists(TROJAN_DB): c.bot.send_document(ADMIN_ID, open(TROJAN_DB, 'rb'), caption="⚡ Trojan DB Backup")
@@ -1248,12 +1414,13 @@ def txt(u, c):
     try:
         if act == 'add_u':
             if not re.match(r"^[a-zA-Z0-9_]+$", msg):
-                u.message.reply_text("❌ Invalid Username! Try again:", parse_mode=ParseMode.HTML, reply_markup=get_back_btn()); return
+                u.message.reply_text("❌ <b>Invalid Username!</b> Try again:", parse_mode=ParseMode.HTML, reply_markup=get_back_btn()); return
             if subprocess.run(["id", msg], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0 or (os.path.exists(DB_FILE) and f"{msg}|" in open(DB_FILE).read()):
-                u.message.reply_text("❌ User already exists! Try another:", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+                u.message.reply_text("❌ <b>User already exists!</b> Try another:", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             else:
                 c.user_data['u'] = msg; c.user_data['act'] = 'add_p'
-                u.message.reply_text(f"👤 Username: {msg}\n\n🔑 Send the Password:", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+                u.message.reply_text(f"👤 Username: <code>{msg}</code>\n\n🔑 <b>Send the Password:</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+
         elif act == 'add_trj_p':
             if not re.match(r"^[a-zA-Z0-9_@-]+$", msg):
                 u.message.reply_text("❌ <b>Invalid Password!</b> Try again:", parse_mode=ParseMode.HTML, reply_markup=get_back_btn()); return
@@ -1263,18 +1430,22 @@ def txt(u, c):
                 c.user_data['p'] = msg; c.user_data['act'] = ''
                 kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES", callback_data='add_yes'), InlineKeyboardButton("🔴 NO", callback_data='add_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
                 u.message.reply_text(f"🔑 Trojan Password: <code>{msg}</code>\n\n⏳ <b>Set Expiry Date by Days?</b>", parse_mode=ParseMode.HTML, reply_markup=kb)
+
         elif act == 'add_p':
             c.user_data['p'] = msg; c.user_data['act'] = ''
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES", callback_data='add_yes'), InlineKeyboardButton("🔴 NO", callback_data='add_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             u.message.reply_text(f"👤 Username: <code>{c.user_data['u']}</code>\n🔑 Password: <code>{msg}</code>\n\n⏳ <b>Set Expiry Date by Days?</b>", parse_mode=ParseMode.HTML, reply_markup=kb)
+
         elif act == 'lu_user':
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("🔒 LOCK", callback_data=f"do_lock_{msg}"), InlineKeyboardButton("🔓 UNLOCK", callback_data=f"do_unlock_{msg}")], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             u.message.reply_text(f"Select action for <code>{msg}</code>:", parse_mode=ParseMode.HTML, reply_markup=kb)
             c.user_data['act'] = ''
+
         elif act == 'r_user':
             c.user_data['ru'] = msg; c.user_data['act'] = ''
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES", callback_data='ren_yes'), InlineKeyboardButton("🔴 NO", callback_data='ren_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
             u.message.reply_text(f"⏳ <b>Set Expiry Date by Days for <code>{msg}</code>?</b>", parse_mode=ParseMode.HTML, reply_markup=kb)
+
         elif act == 'search_u':
             sq = msg.lower(); results = []
             try: shadow_data = open('/etc/shadow', 'r').read()
@@ -1297,12 +1468,14 @@ def txt(u, c):
             reply_text = "✅ <b>RESULTS FOUND:</b>\n\n" + "\n".join(results[:15]) if results else f"❌ <b>NO ACCOUNT FOUND:</b> {msg}"
             u.message.reply_text(reply_text, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             c.user_data['act'] = ''
+
         elif act == 'a_datetime':
             if msg.isdigit() and int(msg) > 0:
                 exp_date = datetime.datetime.now() + datetime.timedelta(days=int(msg))
                 d = exp_date.strftime("%Y-%m-%d"); t = exp_date.strftime("%H:%M")
             else:
                 d = "NEVER"; t = "00:00"
+
             if c.user_data.get('proto') == 'trj':
                 pwd = c.user_data['p']
                 with open(LOCK_FILE, "a") as lock_f:
@@ -1311,7 +1484,7 @@ def txt(u, c):
                         f.write(f"{pwd}|{d}|{t}|ACTIVE\n")
                     fcntl.flock(lock_f, fcntl.LOCK_UN)
                 sync_xray()
-                resp = f"<b>{TLINE}</b>\n <b>TROJAN CREATED</b> \n<b>{TLINE}</b>\n\n🔑 Password : <code>{pwd}</code>\n📅 Expiry : <code>{d}</code>\n⏰ Time : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy : <code>{pwd}</code>\n<b>{TLINE}</b>"
+                resp = f"<b>{TLINE}</b>\n       <b>TROJAN CREATED</b>       \n<b>{TLINE}</b>\n\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{d}</code>\n⏰ Time     : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{pwd}</code>\n<b>{TLINE}</b>"
             else:
                 usr = c.user_data['u']; pwd = c.user_data['p']
                 subprocess.run(["useradd", "-M", "-s", "/bin/false", usr], stdout=subprocess.DEVNULL)
@@ -1321,9 +1494,10 @@ def txt(u, c):
                     with open(DB_FILE, 'a') as f:
                         f.write(f"{usr}|{d}|{t}\n")
                     fcntl.flock(lock_f, fcntl.LOCK_UN)
-                resp = f"<b>{TLINE}</b>\n <b>SSH CREATED</b> \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry : <code>{d}</code>\n⏰ Time : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>"
+                resp = f"<b>{TLINE}</b>\n         <b>SSH CREATED</b>         \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry   : <code>{d}</code>\n⏰ Time     : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy     : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>"
             u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             c.user_data.clear()
+
         elif act == 'r_val':
             usr = c.user_data.get('ru')
             if msg.isdigit() and int(msg) > 0:
@@ -1331,6 +1505,7 @@ def txt(u, c):
                 d = exp_date.strftime("%Y-%m-%d"); t = exp_date.strftime("%H:%M")
             else:
                 d = "NEVER"; t = "23:59"
+
             if c.user_data.get('proto') == 'trj':
                 with open(LOCK_FILE, "a") as lock_f:
                     fcntl.flock(lock_f, fcntl.LOCK_EX)
@@ -1350,6 +1525,7 @@ def txt(u, c):
                     fcntl.flock(lock_f, fcntl.LOCK_UN)
                 subprocess.run(["usermod", "-U", usr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             u.message.reply_text(f"✅ <b>RENEWED & UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
+
         elif act == 'd1':
             c.user_data['del_u'] = msg; c.user_data['act'] = ''
             kb = InlineKeyboardMarkup([[InlineKeyboardButton("🟢 YES", callback_data='del_yes'), InlineKeyboardButton("🔴 NO", callback_data='del_no')], [InlineKeyboardButton("🔙 BACK", callback_data='back')]])
@@ -1366,8 +1542,7 @@ def main():
 
 if __name__ == '__main__': main()
 EOF
-
-cat > /etc/systemd/system/sshbot.service << EOF
+    cat > /etc/systemd/system/sshbot.service << EOF
 [Unit]
 Description=SSH & Trojan Telegram Bot Service
 After=network.target
@@ -1379,88 +1554,86 @@ RestartSec=5
 [Install]
 WantedBy=multi-user.target
 EOF
-systemctl daemon-reload; systemctl enable sshbot >/dev/null 2>&1; systemctl restart sshbot
-
-echo -e "\n${GREEN}✅ SECURE BOT INSTALLED (WITH SSH & TROJAN SUPPORT)!${NC}"
-echo -e "${YELLOW}👉 Go to your Telegram Bot and send /start${NC}"
-pause
+    systemctl daemon-reload; systemctl enable sshbot >/dev/null 2>&1; systemctl restart sshbot
+    
+    echo -e "\n${GREEN}✅ SECURE BOT INSTALLED (WITH SSH & TROJAN SUPPORT)!${NC}"
+    echo -e "${YELLOW}👉 Go to your Telegram Bot and send /start${NC}"
+    pause
 }
 
+# =============================================
+# 10. SETTINGS MENU
+# =============================================
 fun_settings() {
-while true; do
-draw_header
-echo -e " ⚙️ ${BLUE}SETTINGS & TOOLS${NC}\n${LINE}"
-echo -e " ${BLUE}[1] 🛠️ INSTALL TELEGRAM BOT${NC}"
-echo -e " ${BLUE}[2] 🌍 SET TIMEZONE${NC}"
-echo -e " ${BLUE}[3] 📤 EXPORT USERS${NC}"
-echo -e " ${BLUE}[4] 📥 RESTORE USERS${NC}"
-echo -e " ${BLUE}[0] 🔙 BACK${NC}\n${LINE}"
-echo -ne " ${BLUE}SELECT: ${NC}"
-read s
-case "$s" in
-1) fun_install_bot ;;
-2)
-echo -ne " ${BLUE}🌍 Enter Timezone : ${NC}"
-read tz
-if timedatectl set-timezone "$tz" 2>/dev/null; then
-echo -e "\n${GREEN} ✅ TIMEZONE SET TO $tz${NC}"; pause
-else
-echo -e "\n${RED} ❌ INVALID TIMEZONE!${NC}"; pause
-fi
-;;
-3) fun_export_users ;;
-4) fun_import_users ;;
-0) break ;;
-*) echo -e "\n${RED} INVALID OPTION!${NC}" ; sleep 1 ;;
-esac
-done
+    while true; do
+        draw_header
+        echo -e "            ⚙️ ${BLUE}SETTINGS & TOOLS${NC}\n${LINE}"
+        echo -e "  ${BLUE}[1] 🛠️ INSTALL TELEGRAM BOT${NC}"
+        echo -e "  ${BLUE}[2] 🌍 SET TIMEZONE${NC}"
+        echo -e "  ${BLUE}[3] 📤 EXPORT USERS${NC}"
+        echo -e "  ${BLUE}[4] 📥 RESTORE USERS${NC}"
+        echo -e "  ${BLUE}[0] 🔙 BACK${NC}\n${LINE}"
+        echo -ne "  ${BLUE}SELECT: ${NC}"
+        read s
+        case "$s" in
+            1) fun_install_bot ;;
+            2) 
+                echo -ne " ${BLUE}🌍 Enter Timezone : ${NC}"
+                read tz
+                if timedatectl set-timezone "$tz" 2>/dev/null; then
+                    echo -e "\n${GREEN} ✅ TIMEZONE SET TO $tz${NC}"; pause
+                else
+                    echo -e "\n${RED} ❌ INVALID TIMEZONE!${NC}"; pause
+                fi
+                ;;
+            3) fun_export_users ;;
+            4) fun_import_users ;;
+            0) break ;;
+            *) echo -e "\n${RED} INVALID OPTION!${NC}" ; sleep 1 ;;
+        esac
+    done
 }
 
+# =============================================
+# 11. WS-TUNNEL INSTALLER MENU & FUNCTIONS
+# =============================================
 function pause_menu() {
-echo
-read -rp "PRESS ENTER TO RETURN TO WS-TUNNEL MENU..."
+    echo
+    read -rp "PRESS ENTER TO RETURN TO WS-TUNNEL MENU..."
 }
 
 function prepare_system_and_download() {
-echo -e "${YELLOW}🔄 UPDATING SYSTEM AND INSTALLING DEPENDENCIES${NC}"
-apt-get update -y > /dev/null 2>&1
-apt-get install curl unzip psmisc -y > /dev/null 2>&1
+    echo -e "${YELLOW}🔄 UPDATING SYSTEM AND INSTALLING DEPENDENCIES${NC}"
+    apt-get update -y > /dev/null 2>&1
+    apt-get install curl unzip -y > /dev/null 2>&1
 
-if [ ! -f "/usr/local/bin/WebSocket-VPN" ]; then
-echo -e "${YELLOW}⬇️ DOWNLOADING WEBSOCKET-VPN FROM GITHUB${NC}"
-curl -s -o WebSocket-VPN https://raw.githubusercontent.com/GO-HAMZA/VPN-SCRIPT/main/WebSocket-VPN
-chmod 777 WebSocket-VPN
-mv WebSocket-VPN /usr/local/bin/WebSocket-VPN
-echo -e "${GREEN}✅ WEBSOCKET-VPN DOWNLOADED AND READY!${NC}"
-fi
+    if [ ! -f "/usr/local/bin/WebSocket-VPN" ]; then
+        echo -e "${YELLOW}⬇️ DOWNLOADING WEBSOCKET-VPN FROM GITHUB${NC}"
+        curl -s -o WebSocket-VPN https://raw.githubusercontent.com/GO-HAMZA/VPN-SCRIPT/main/WebSocket-VPN
+        chmod 777 WebSocket-VPN
+        mv WebSocket-VPN /usr/local/bin/WebSocket-VPN
+        echo -e "${GREEN}✅ WEBSOCKET-VPN DOWNLOADED AND READY!${NC}"
+    fi
 }
 
 function install_ssh_ws() {
-clear
-echo -e "${L_BLUE}========================================${NC}"
-echo -e "${CYAN} INSTALL SSH OVER WEBSOCKET ${NC}"
-echo -e "${L_BLUE}========================================${NC}"
+    clear
+    echo -e "${L_BLUE}========================================${NC}"
+    echo -e "${CYAN}        INSTALL SSH OVER WEBSOCKET      ${NC}"
+    echo -e "${L_BLUE}========================================${NC}"
+    
+    prepare_system_and_download
+    
+    echo
+    read -rp "🌐 LISTEN PORT [DEFAULT 80]: " ws_port
+    ws_port=${ws_port:-80}
+    
+    read -rp "⚙️ TARGET PORT [DEFAULT 22]: " ssh_port
+    ssh_port=${ssh_port:-22}
 
-prepare_system_and_download
-echo
-read -rp "🌐 LISTEN PORT [DEFAULT 80]: " ws_port
-ws_port=${ws_port:-80}
-read -rp "⚙️ TARGET PORT [DEFAULT 22]: " ssh_port
-ssh_port=${ssh_port:-22}
-
-# Don't touch web servers even if port 80 is selected
-# if [[ "$ws_port" == "80" ]]; then
-# systemctl stop nginx apache2 2>/dev/null
-# systemctl disable nginx apache2 2>/dev/null
-# fi fuser -k "${ws_port}/tcp" >/dev/null 2>&1
-
-# Automatically open selected port in firewall for all tunnel apps
-ufw allow "$ws_port"/tcp >/dev/null 2>&1
-iptables -I INPUT -p tcp --dport "$ws_port" -j ACCEPT >/dev/null 2>&1
-
-echo
-echo -e "${YELLOW}⚙️ CREATING SYSTEMD SERVICE FOR SSH-WS...${NC}"
-tee /etc/systemd/system/ssh-ws.service > /dev/null <<EOF
+    echo
+    echo -e "${YELLOW}⚙️ CREATING SYSTEMD SERVICE FOR SSH-WS...${NC}"
+    tee /etc/systemd/system/ssh-ws.service > /dev/null <<EOF
 [Unit]
 Description=SSH WebSocket Tunnel
 After=network.target ssh.service
@@ -1469,132 +1642,132 @@ After=network.target ssh.service
 Type=simple
 User=root
 ExecStart=/usr/local/bin/WebSocket-VPN -listenAddr :$ws_port -targetAddr 127.0.0.1:$ssh_port
-Restart=always
+Restart=on-failure
 RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable ssh-ws > /dev/null 2>&1
-systemctl restart ssh-ws
-echo
+    systemctl daemon-reload
+    systemctl enable ssh-ws > /dev/null 2>&1
+    systemctl restart ssh-ws
+
+    echo
 echo -e "${GREEN}✅ SSH WS INSTALLED SUCCESSFULLY!${NC}"
 printf "EXTERNAL PORT      : ${CYAN}%s${NC}\n" "$ws_port"
 printf "TARGET PORT        : ${CYAN}%s (SSH)${NC}\n" "$ssh_port"
 printf "SERVICE NAME       : ${CYAN}SSH-WS${NC}\n"
-pause_menu
+    
+    pause_menu
 }
 
 function install_trojan_ws() {
-clear
-echo -e "${L_BLUE}========================================${NC}"
-echo -e "${CYAN} INSTALL TROJAN OVER WEBSOCKET ${NC}"
-echo -e "${L_BLUE}========================================${NC}"
+    clear
+    echo -e "${L_BLUE}========================================${NC}"
+    echo -e "${CYAN}       INSTALL TROJAN OVER WEBSOCKET    ${NC}"
+    echo -e "${L_BLUE}========================================${NC}"
+    
+    prepare_system_and_download
+    
+    echo
+    read -rp "🔑 TROJAN PASSWORD [OPTIONAL]: " trojan_password
+    read -rp "🌐 LISTEN PORT [DEFAULT 8080]: " ws_port
+    ws_port=${ws_port:-8080}
+    
+    read -rp "⚙️ TARGET PORT [DEFAULT 2000]: " xray_port
+    xray_port=${xray_port:-2000}
 
-prepare_system_and_download
-echo
-read -rp "🔑 TROJAN PASSWORD [OPTIONAL]: " trojan_password
-read -rp "🌐 LISTEN PORT [DEFAULT 8080]: " ws_port
-ws_port=${ws_port:-8080}
-read -rp "⚙️ TARGET PORT [DEFAULT 2000]: " xray_port
-xray_port=${xray_port:-2000}
-listen_ip="127.0.0.1"
+    listen_ip="127.0.0.1"
 
-# Stop conflicting web servers if port 80 is selected and free the target port
-if [[ "$ws_port" == "80" ]]; then
-systemctl stop nginx apache2 2>/dev/null
-systemctl disable nginx apache2 2>/dev/null
-fi
-fuser -k "${ws_port}/tcp" >/dev/null 2>&1
+    echo
+    echo -e "${YELLOW}📦 INSTALLING XRAY CORE...${NC}"
+    curl -sL https://github.com/XTLS/Xray-install/raw/main/install-release.sh | bash -s -- install > /dev/null 2>&1
 
-# Automatically open selected port in firewall for all tunnel apps
-ufw allow "$ws_port"/tcp >/dev/null 2>&1
-iptables -I INPUT -p tcp --dport "$ws_port" -j ACCEPT >/dev/null 2>&1
+    systemctl stop xray > /dev/null 2>&1
+    mkdir -p /usr/local/etc/xray /var/log/xray
+    touch "$XRAY_ACCESS_LOG"
+    chmod 666 "$XRAY_ACCESS_LOG"
 
-echo
-echo -e "${YELLOW}📦 INSTALLING XRAY CORE...${NC}"
-curl -sL https://github.com/XTLS/Xray-install/raw/main/install-release.sh | bash -s -- install > /dev/null 2>&1
-systemctl stop xray > /dev/null 2>&1
-mkdir -p /usr/local/etc/xray /var/log/xray
-touch "$XRAY_ACCESS_LOG"
-chmod 666 "$XRAY_ACCESS_LOG"
+    # Add initial password to TROJAN_DB if provided
+    if [[ -n "$trojan_password" ]] && ! grep -q "^$trojan_password|" "$TROJAN_DB"; then
+        (
+            flock -x 200
+            echo "$trojan_password|NEVER|00:00|ACTIVE" >> "$TROJAN_DB"
+        ) 200>"$DB_LOCK"
+    fi
 
-if [[ -n "$trojan_password" ]] && ! grep -q "^$trojan_password|" "$TROJAN_DB"; then
-( flock -x 200; echo "$trojan_password|NEVER|00:00|ACTIVE" >> "$TROJAN_DB" ) 200>"$DB_LOCK"
-fi
-
-echo -e "${YELLOW}⚙️ CONFIGURING XRAY...${NC}"
-tee "$XRAY_CONF" > /dev/null <<EOF
+    echo -e "${YELLOW}⚙️ CONFIGURING XRAY...${NC}"
+    tee "$XRAY_CONF" > /dev/null <<EOF
 {
-"log": {
-"access": "/var/log/xray/access.log",
-"error": "/var/log/xray/error.log",
-"loglevel": "info"
-},
-"stats": {},
-"api": {
-"tag": "api",
-"services": ["HandlerService", "LoggerService", "StatsService"]
-},
-"policy": {
-"levels": {
-"0": {
-"statsUserUplink": true,
-"statsUserDownlink": true,
-"statsUserOnline": true
-}
-},
-"system": {
-"statsInboundUplink": true,
-"statsInboundDownlink": true
-}
-},
-"inbounds": [
-{
-"tag": "trojan-inbound",
-"listen": "$listen_ip",
-"port": $xray_port,
-"protocol": "trojan",
-"settings": {
-"clients": []
-},
-"streamSettings": {
-"network": "tcp",
-"security": "none"
-}
-},
-{
-"listen": "127.0.0.1",
-"port": 10085,
-"protocol": "dokodemo-door",
-"settings": {
-"address": "127.0.0.1"
-},
-"tag": "api"
-}
-],
-"outbounds": [
-{
-"protocol": "freedom"
-}
-],
-"routing": {
-"rules": [
-{
-"inboundTag": ["api"],
-"outboundTag": "api",
-"type": "field"
-}
-]
-}
+  "log": {
+    "access": "/var/log/xray/access.log",
+    "error": "/var/log/xray/error.log",
+    "loglevel": "info"
+  },
+  "stats": {},
+  "api": {
+    "tag": "api",
+    "services": ["HandlerService", "LoggerService", "StatsService"]
+  },
+  "policy": {
+    "levels": {
+      "0": {
+        "statsUserUplink": true,
+        "statsUserDownlink": true,
+        "statsUserOnline": true
+      }
+    },
+    "system": {
+      "statsInboundUplink": true,
+      "statsInboundDownlink": true
+    }
+  },
+  "inbounds": [
+    {
+      "tag": "trojan-inbound",
+      "listen": "$listen_ip",
+      "port": $xray_port,
+      "protocol": "trojan",
+      "settings": {
+        "clients": []
+      },
+      "streamSettings": {
+        "network": "tcp",
+        "security": "none"
+      }
+    },
+    {
+      "listen": "127.0.0.1",
+      "port": 10085,
+      "protocol": "dokodemo-door",
+      "settings": {
+        "address": "127.0.0.1"
+      },
+      "tag": "api"
+    }
+  ],
+  "outbounds": [
+    {
+      "protocol": "freedom"
+    }
+  ],
+  "routing": {
+    "rules": [
+      {
+        "inboundTag": ["api"],
+        "outboundTag": "api",
+        "type": "field"
+      }
+    ]
+  }
 }
 EOF
 
-sync_trojan_xray
-echo -e "${YELLOW}⚙️ CREATING SYSTEMD SERVICE FOR TROJAN-WS...${NC}"
-tee /etc/systemd/system/trojan-ws.service > /dev/null <<EOF
+    sync_trojan_xray
+
+    echo -e "${YELLOW}⚙️ CREATING SYSTEMD SERVICE FOR TROJAN-WS...${NC}"
+    tee /etc/systemd/system/trojan-ws.service > /dev/null <<EOF
 [Unit]
 Description=Trojan WebSocket Tunnel
 After=network.target xray.service
@@ -1603,156 +1776,173 @@ After=network.target xray.service
 Type=simple
 User=root
 ExecStart=/usr/local/bin/WebSocket-VPN -listenAddr :$ws_port -targetAddr 127.0.0.1:$xray_port
-Restart=always
+Restart=on-failure
 RestartSec=3
 
 [Install]
 WantedBy=multi-user.target
 EOF
 
-systemctl daemon-reload
-systemctl enable xray > /dev/null 2>&1
-systemctl restart xray
-systemctl enable trojan-ws > /dev/null 2>&1
-systemctl restart trojan-ws
-echo
+    systemctl daemon-reload
+    systemctl enable xray > /dev/null 2>&1
+    systemctl restart xray
+    systemctl enable trojan-ws > /dev/null 2>&1
+    systemctl restart trojan-ws
+
+    echo
 echo -e "${GREEN}✅ TROJAN WS INSTALLED SUCCESSFULLY!${NC}"
 printf "EXTERNAL PORT      : ${CYAN}%s${NC}\n" "$ws_port"
 printf "XRAY LOCAL PORT    : ${CYAN}%s${NC}\n" "$xray_port"
 printf "SERVICE NAMES      : ${CYAN}XRAY • TROJAN-WS${NC}\n"
 [[ -n "$trojan_password" ]] && printf "TROJAN PASSWORD    : ${CYAN}%s [ Saved ]${NC}\n" "$trojan_password"
-pause_menu
+    
+    pause_menu
 }
 
 function restart_services() {
-clear
-echo -e "${L_BLUE}========================================${NC}"
-echo -e "${CYAN} RESTART SERVICES ${NC}"
-echo -e "${L_BLUE}========================================${NC}"
-echo -e " ${YELLOW}[01]${NC} RESTART SSH WS"
-echo -e " ${YELLOW}[02]${NC} RESTART TROJAN WS (XRAY)"
-echo -e "${L_BLUE}========================================${NC}"
-read -rp "➡️ [1-2]: " srv_choice
-
-echo
-case $srv_choice in
-1|01)
-echo -e "${YELLOW}🔄 RESTARTING SSH-WS SERVICE...${NC}"
-systemctl restart ssh-ws
-echo -e "${GREEN}✅ SSH-WS RESTARTED SUCCESSFULLY!${NC}"
-;;
-2|02)
-echo -e "${YELLOW}🔄 RESTARTING XRAY AND TROJAN-WS SERVICES...${NC}"
-systemctl restart xray
-systemctl restart trojan-ws
-echo -e "${GREEN}✅ TROJAN-WS AND XRAY RESTARTED SUCCESSFULLY!${NC}"
-;;
-*) echo -e "${RED}❌ INVALID CHOICE!${NC}" ;;
-esac
-pause_menu
+    clear
+    echo -e "${L_BLUE}========================================${NC}"
+    echo -e "${CYAN}             RESTART SERVICES           ${NC}"
+    echo -e "${L_BLUE}========================================${NC}"
+    echo -e "  ${YELLOW}[01]${NC} RESTART SSH WS"
+    echo -e "  ${YELLOW}[02]${NC} RESTART TROJAN WS (XRAY)"
+    echo -e "${L_BLUE}========================================${NC}"
+    read -rp "➡️ [1-2]: " srv_choice
+    
+    echo
+    case $srv_choice in
+        1|01)
+            echo -e "${YELLOW}🔄 RESTARTING SSH-WS SERVICE...${NC}"
+            systemctl restart ssh-ws
+            echo -e "${GREEN}✅ SSH-WS RESTARTED SUCCESSFULLY!${NC}"
+            ;;
+        2|02)
+            echo -e "${YELLOW}🔄 RESTARTING XRAY AND TROJAN-WS SERVICES...${NC}"
+            systemctl restart xray
+            systemctl restart trojan-ws
+            echo -e "${GREEN}✅ TROJAN-WS AND XRAY RESTARTED SUCCESSFULLY!${NC}"
+            ;;
+        *)
+            echo -e "${RED}❌ INVALID CHOICE!${NC}"
+            ;;
+    esac
+    
+    pause_menu
 }
 
 function check_status() {
-clear
-echo -e "${L_BLUE}========================================${NC}"
-echo -e "${CYAN} CHECK SERVICE STATUS ${NC}"
-echo -e "${L_BLUE}========================================${NC}"
-echo -e " ${YELLOW}[01]${NC} STATUS OF SSH WS"
-echo -e " ${YELLOW}[02]${NC} STATUS OF TROJAN WS"
-echo -e "${L_BLUE}========================================${NC}"
-read -rp "➡️ [1-2]: " stat_choice
-
-echo
-case $stat_choice in
-1|01)
-echo -e "${YELLOW}ℹ️ FETCHING SSH-WS STATUS...${NC}"
-systemctl status ssh-ws --no-pager
-;;
-2|02)
-echo -e "${YELLOW}ℹ️ FETCHING TROJAN-WS AND XRAY STATUS...${NC}"
-systemctl status trojan-ws --no-pager
-echo -e "${L_BLUE}----------------------------------------${NC}"
-systemctl status xray --no-pager
-;;
-*) echo -e "${RED}❌ INVALID CHOICE!${NC}" ;;
-esac
-pause_menu
+    clear
+    echo -e "${L_BLUE}========================================${NC}"
+    echo -e "${CYAN}           CHECK SERVICE STATUS         ${NC}"
+    echo -e "${L_BLUE}========================================${NC}"
+    echo -e "  ${YELLOW}[01]${NC} STATUS OF SSH WS"
+    echo -e "  ${YELLOW}[02]${NC} STATUS OF TROJAN WS"
+    echo -e "${L_BLUE}========================================${NC}"
+    read -rp "➡️ [1-2]: " stat_choice
+    
+    echo
+    case $stat_choice in
+        1|01)
+            echo -e "${YELLOW}ℹ️ FETCHING SSH-WS STATUS...${NC}"
+            systemctl status ssh-ws --no-pager
+            ;;
+        2|02)
+            echo -e "${YELLOW}ℹ️ FETCHING TROJAN-WS AND XRAY STATUS...${NC}"
+            systemctl status trojan-ws --no-pager
+            echo -e "${L_BLUE}----------------------------------------${NC}"
+            systemctl status xray --no-pager
+            ;;
+        *)
+            echo -e "${RED}❌ INVALID CHOICE!${NC}"
+            ;;
+    esac
+    
+    pause_menu
 }
 
 function uninstall_all() {
-clear
-echo -e "${L_BLUE}========================================${NC}"
-echo -e "${RED} UNINSTALL & CLEAN UP ${NC}"
-echo -e "${L_BLUE}========================================${NC}"
-echo -e "${YELLOW}STOPPING AND REMOVING ALL SERVICES...${NC}"
-
-systemctl stop ssh-ws trojan-ws xray 2>/dev/null
-systemctl disable ssh-ws trojan-ws xray 2>/dev/null
-rm -f /etc/systemd/system/ssh-ws.service
-rm -f /etc/systemd/system/trojan-ws.service
-rm -f /usr/local/bin/WebSocket-VPN
-systemctl daemon-reload
-echo
-echo -e "${GREEN}✅ ALL CUSTOM SERVICES AND FILES HAVE BEEN COMPLETELY REMOVED.${NC}"
-pause_menu
+    clear
+    echo -e "${L_BLUE}========================================${NC}"
+    echo -e "${RED}          UNINSTALL & CLEAN UP          ${NC}"
+    echo -e "${L_BLUE}========================================${NC}"
+    echo -e "${YELLOW}STOPPING AND REMOVING ALL SERVICES...${NC}"
+    
+    systemctl stop ssh-ws trojan-ws xray 2>/dev/null
+    systemctl disable ssh-ws trojan-ws xray 2>/dev/null
+    
+    rm -f /etc/systemd/system/ssh-ws.service
+    rm -f /etc/systemd/system/trojan-ws.service
+    rm -f /usr/local/bin/WebSocket-VPN
+    
+    systemctl daemon-reload
+    echo
+    echo -e "${GREEN}✅ ALL CUSTOM SERVICES AND FILES HAVE BEEN COMPLETELY REMOVED.${NC}"
+    
+    pause_menu
 }
 
 fun_ws_tunnel_menu() {
-while true; do
-clear
-echo -e "${L_BLUE}========================================${NC}"
-echo -e "${B_RED}   ===== V P N - I N S T A L L E R ===== ${NC}"
-echo -e "${L_BLUE}========================================${NC}"
-echo -e " ${YELLOW}[01]${NC} ${D_BLUE}INSTALL SSH WS${NC}"
-echo -e " ${YELLOW}[02]${NC} ${D_BLUE}INSTALL TROJAN WS${NC}"
-echo -e " ${YELLOW}[03]${NC} ${D_BLUE}RESTART SERVICES${NC}"
-echo -e " ${YELLOW}[04]${NC} ${D_BLUE}CHECK SERVICE STATUS${NC}"
-echo -e " ${YELLOW}[05]${NC} ${D_BLUE}UNINSTALL SERVICES${NC}"
-echo -e " ${YELLOW}[00]${NC} ${D_BLUE}BACK TO MAIN MANAGER${NC}"
-echo -e "${L_BLUE}========================================${NC}"
-read -rp "➡️ [0-5]: " choice
+    while true; do
+        clear
+        echo -e "${L_BLUE}========================================${NC}"
+        echo -e "${B_RED}       V P N   I N S T A L L E R        ${NC}"
+        echo -e "${L_BLUE}========================================${NC}"
+        echo -e "  ${YELLOW}[01]${NC} ${D_BLUE}INSTALL SSH WS${NC}"
+        echo -e "  ${YELLOW}[02]${NC} ${D_BLUE}INSTALL TROJAN WS${NC}"
+        echo -e "  ${YELLOW}[03]${NC} ${D_BLUE}RESTART SERVICES${NC}"
+        echo -e "  ${YELLOW}[04]${NC} ${D_BLUE}CHECK SERVICE STATUS${NC}"
+        echo -e "  ${YELLOW}[05]${NC} ${D_BLUE}UNINSTALL SERVICES${NC}"
+        echo -e "  ${YELLOW}[00]${NC} ${D_BLUE}BACK TO MAIN MANAGER${NC}"
+        echo -e "${L_BLUE}========================================${NC}"
+        read -rp "➡️ [0-5]: " choice
 
-case $choice in
-1|01) install_ssh_ws ;;
-2|02) install_trojan_ws ;;
-3|03) restart_services ;;
-4|04) check_status ;;
-5|05) uninstall_all ;;
-0|00) break ;;
-*) echo -e "${RED}❌ INVALID OPTION! PLEASE TRY AGAIN.${NC}"; sleep 1 ;;
-esac
-done
+        case $choice in
+            1|01) install_ssh_ws ;;
+            2|02) install_trojan_ws ;;
+            3|03) restart_services ;;
+            4|04) check_status ;;
+            5|05) uninstall_all ;;
+            0|00) break ;;
+            *)
+                echo -e "${RED}❌ INVALID OPTION! PLEASE TRY AGAIN.${NC}"
+                sleep 1
+                ;;
+        esac
+    done
 }
 
+# =============================================
+# MAIN MENU
+# =============================================
 while true; do
-draw_header
-echo -e " ${BLUE}[01] • CREATE ACCOUNT${NC}"
-echo -e " ${BLUE}[02] • RENEW ACCOUNT${NC}"
-echo -e " ${BLUE}[03] • DELETE ACCOUNT${NC}"
-echo -e " ${BLUE}[04] • LOCK - UNLOCK ACCOUNT${NC}"
-echo -e " ${BLUE}[05] • LIST ACCOUNTS${NC}"
-echo -e " ${BLUE}[06] • SEARCH ACCOUNT${NC}"
-echo -e " ${BLUE}[07] • MONITOR ACCOUNT${NC}"
-echo -e " ${BLUE}[08] • BACKUP DATA${NC}"
-echo -e " ${BLUE}[09] • EXPIRED ACCOUNTS${NC}"
-echo -e " ${BLUE}[10] • SETTINGS & BOT${NC}"
-echo -e " ${BLUE}[11] • SSH WS & TROJAN WS${NC}"
-echo -e " ${BLUE}[00] • EXIT${NC}\n${LINE}"
-echo -ne " ${BLUE}SELECT :${NC} "
-read o
-case "$o" in
-1|01) fun_create ;;
-2|02) fun_renew ;;
-3|03) fun_remove ;;
-4|04) fun_lock ;;
-5|05) fun_list ;;
-6|06) fun_search ;;
-7|07) fun_monitor_view ;;
-8|08) fun_backup ;;
-9|09) fun_violations ;;
-10) fun_settings ;;
-11) fun_ws_tunnel_menu ;;
-0|00) clear; exit 0 ;;
-*) echo -e "\n${RED} INVALID OPTION!${NC}" ; sleep 1 ;;
-esac
+    draw_header
+    echo -e "  ${BLUE}[01] • CREATE ACCOUNT${NC}"
+    echo -e "  ${BLUE}[02] • RENEW ACCOUNT${NC}"
+    echo -e "  ${BLUE}[03] • DELETE ACCOUNT${NC}"
+    echo -e "  ${BLUE}[04] • LOCK - UNLOCK ACCOUNT${NC}"
+    echo -e "  ${BLUE}[05] • LIST ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[06] • SEARCH ACCOUNT${NC}"
+    echo -e "  ${BLUE}[07] • MONITOR ACCOUNT${NC}"
+    echo -e "  ${BLUE}[08] • BACKUP DATA${NC}"
+    echo -e "  ${BLUE}[09] • EXPIRED ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[10] • SETTINGS & BOT${NC}"
+    echo -e "  ${BLUE}[11] • SSH WS & TROJAN WS${NC}"
+    echo -e "  ${BLUE}[00] • EXIT${NC}\n${LINE}"
+    echo -ne "  ${BLUE}SELECT :${NC} "
+    read o
+    case "$o" in
+        1|01) fun_create ;; 
+        2|02) fun_renew ;; 
+        3|03) fun_remove ;; 
+        4|04) fun_lock ;;
+        5|05) fun_list ;; 
+        6|06) fun_search ;; 
+        7|07) fun_monitor_view ;; 
+        8|08) fun_backup ;; 
+        9|09) fun_violations ;; 
+        10) fun_settings ;;  
+        11) fun_ws_tunnel_menu ;;
+        0|00) clear; exit 0 ;;
+        *) echo -e "\n${RED} INVALID OPTION!${NC}" ; sleep 1 ;;
+    esac
 done
