@@ -897,17 +897,17 @@ fun_settings() {
 # =============================================
 while true; do
     draw_header
-    echo -e "  ${BLUE}[01] 👤 CREATE ACCOUNT${NC}"
-    echo -e "  ${BLUE}[02] 🔄 RENEW ACCOUNT${NC}"
-    echo -e "  ${BLUE}[03] 🗑 DELETE ACCOUNT${NC}"
-    echo -e "  ${BLUE}[04] ⛔ LOCK ACCOUNT${NC}"
-    echo -e "  ${BLUE}[05] 📋 LIST ACCOUNTS${NC}"
-    echo -e "  ${BLUE}[06] 🔍 SEARCH ACCOUNT${NC}"
-    echo -e "  ${BLUE}[07] 🧿 MONITOR ACCOUNT${NC}"
-    echo -e "  ${BLUE}[08] 💾 BACKUP DATA${NC}"
-    echo -e "  ${BLUE}[09] 🔔 EXPIRED ACCOUNTS${NC}"
-    echo -e "  ${BLUE}[10] ⚙️ SETTINGS${NC}"
-    echo -e "  ${BLUE}[00] ↪️ EXIT${NC}\n${LINE}"
+    echo -e "  ${BLUE}[01]  CREATE ACCOUNT${NC}"
+    echo -e "  ${BLUE}[02]  RENEW ACCOUNT${NC}"
+    echo -e "  ${BLUE}[03]  DELETE ACCOUNT${NC}"
+    echo -e "  ${BLUE}[04]  LOCK ACCOUNT${NC}"
+    echo -e "  ${BLUE}[05]  LIST ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[06]  SEARCH ACCOUNT${NC}"
+    echo -e "  ${BLUE}[07]  MONITOR ACCOUNT${NC}"
+    echo -e "  ${BLUE}[08]  BACKUP DATA${NC}"
+    echo -e "  ${BLUE}[09]  EXPIRED ACCOUNTS${NC}"
+    echo -e "  ${BLUE}[10]  SETTINGS${NC}"
+    echo -e "  ${BLUE}[00]  EXIT${NC}\n${LINE}"
     echo -ne "  ${BLUE}SELECT:${NC} "
     read o
     case "$o" in
