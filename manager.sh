@@ -43,8 +43,8 @@ touch "$USER_DB" "$TROJAN_DB" "$LOG_FILE" "$DB_LOCK" "$XRAY_ACCESS_LOG"
 chmod 666 "$XRAY_ACCESS_LOG" 2>/dev/null
 [[ ! -f "$BOT_CONF" ]] && touch "$BOT_CONF"
 
-if ! command -v python3 &> /dev/null || ! command -v pip3 &> /dev/null || ! command -v curl &> /dev/null || ! command -v unzip &> /dev/null; then
-eval "$CMD python3 python3-pip python3-venv systemd-logind curl unzip iproute2" > /dev/null 2>&1
+if ! command -v python3 &> /dev/null || ! command -v pip3 &> /dev/null || ! command -v curl &> /dev/null || ! command -v unzip &> /dev/null || ! command -v fuser &> /dev/null; then
+eval "$CMD python3 python3-pip python3-venv systemd-logind curl unzip iproute2 psmisc" > /dev/null 2>&1
 fi
 
 if [ ! -d "$VENV_DIR" ]; then
@@ -634,7 +634,7 @@ echo -e " ${BLUE}[1] LOCK ⛔${NC}\n ${BLUE}[2] UNLOCK 🔓${NC}"
 echo -ne " ${BLUE}SELECT: ${NC}"
 read s
 line_data=$(grep "^$p|" "$TROJAN_DB" | head -n 1)
-IFS='|' read -r _ d t _ <<< "$line_data"
+IFS='|' read -r _ d t _ < <(echo "$line_data")
 if [[ "$s" == "1" ]]; then
 ( flock -x 200; sed -i "/^$p|/d" "$TROJAN_DB"; echo "$p|$d|$t|LOCKED" >> "$TROJAN_DB" ) 200>"$DB_LOCK"
 echo -e "\n${GREEN} ⛔ TROJAN ACCOUNT LOCKED & DISCONNECTED${NC}"
@@ -707,7 +707,7 @@ while IFS='|' read -r u d t rest; do
 [[ -z "$u" ]] && continue
 if id "$u" &>/dev/null; then
 if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
-if echo "$SHADOW_CACHE" | grep -q "^${u}:!"; then LOCK_STAT="${RED}⛔ LOCKED (EXPIRED OR BANNED)${NC}" else LOCK_STAT="${GREEN}🟢 ACTIVE${NC}" fi
+if echo "$SHADOW_CACHE" | grep -q "^${u}:!"; then LOCK_STAT="${RED}⛔ LOCKED (EXPIRED OR BANNED)${NC}"; else LOCK_STAT="${GREEN}🟢 ACTIVE${NC}"; fi
 echo -e " ${CYAN}[SSH]${NC}"
 echo -e " ${BLUE}👤 Username :${NC} ${WHITE}$u${NC}"
 echo -e " ${BLUE}📊 Status :${NC} $LOCK_STAT"
@@ -720,7 +720,7 @@ if [[ -n "$trj_results" ]]; then
 while IFS='|' read -r p d t st rest; do
 [[ -z "$p" ]] && continue
 if [[ "$d" == "NEVER" || "$d" == "EXPIRED" ]]; then DATE_STR="$d"; else DATE_STR="$d $t"; fi
-if [[ "$st" == "LOCKED" || "$d" == "EXPIRED" ]]; then LOCK_STAT="${RED}⛔ LOCKED (EXPIRED OR BANNED)${NC}" else LOCK_STAT="${GREEN}🟢 ACTIVE${NC}" fi
+if [[ "$st" == "LOCKED" || "$d" == "EXPIRED" ]]; then LOCK_STAT="${RED}⛔ LOCKED (EXPIRED OR BANNED)${NC}"; else LOCK_STAT="${GREEN}🟢 ACTIVE${NC}"; fi
 echo -e " ${YELLOW}[TROJAN]${NC}"
 echo -e " ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
 echo -e " ${BLUE}📊 Status :${NC} $LOCK_STAT"
@@ -828,7 +828,7 @@ if [ -f "$LOG_FILE" ]; then
 ALERTS=$(grep "ACCOUNT EXPIRED" "$LOG_FILE" | tail -n 20)
 if [[ -z "$ALERTS" ]]; then echo -e " ${GREEN}✅ NO EXPIRED ACCOUNTS DETECTED YET.${NC}"
 else
-while read -r line; do echo -e " ${YELLOW}🕒 $line${NC}"; done <<< "$ALERTS"
+while read -r line; do echo -e " ${YELLOW}🕒 $line${NC}"; done < <(echo "$ALERTS")
 fi
 else
 echo -e " ${YELLOW}LOG FILE IS EMPTY.${NC}"
@@ -1024,18 +1024,22 @@ def btn(u, c):
             dt = "NEVER"; tm = "00:00"
             if c.user_data.get('proto') == 'trj':
                 pwd = c.user_data['p']
-                with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                with open(TROJAN_DB, 'a') as f: f.write(f"{pwd}|{dt}|{tm}|ACTIVE\n")
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                with open(LOCK_FILE, "a") as lock_f:
+                    fcntl.flock(lock_f, fcntl.LOCK_EX)
+                    with open(TROJAN_DB, 'a') as f:
+                        f.write(f"{pwd}|{dt}|{tm}|ACTIVE\n")
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
                 sync_xray()
                 resp = f"<b>{TLINE}</b>\n <b>TROJAN CREATED</b> \n<b>{TLINE}</b>\n\n🔑 Password : <code>{pwd}</code>\n📅 Expiry : <code>{dt}</code>\n⏰ Time : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy : <code>{pwd}</code>\n<b>{TLINE}</b>"
             else:
                 usr = c.user_data['u']; pwd = c.user_data['p']
                 subprocess.run(["useradd", "-M", "-s", "/bin/false", usr], stdout=subprocess.DEVNULL)
                 subprocess.run(["chpasswd"], input=f"{usr}:{pwd}".encode(), stdout=subprocess.DEVNULL)
-                with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                with open(DB_FILE, 'a') as f: f.write(f"{usr}|{dt}|{tm}\n")
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                with open(LOCK_FILE, "a") as lock_f:
+                    fcntl.flock(lock_f, fcntl.LOCK_EX)
+                    with open(DB_FILE, 'a') as f:
+                        f.write(f"{usr}|{dt}|{tm}\n")
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
                 resp = f"<b>{TLINE}</b>\n <b>SSH CREATED</b> \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry : <code>{dt}</code>\n⏰ Time : <code>{tm}</code>\n\n<b>{TLINE}</b>\n📋 Copy : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>"
             q.edit_message_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             c.user_data.clear()
@@ -1051,20 +1055,22 @@ def btn(u, c):
         elif d == 'ren_no':
             usr = c.user_data.get('ru')
             if c.user_data.get('proto') == 'trj':
-                with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                with open(TROJAN_DB, 'r+') as f:
-                    lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
-                    lines.append(f"{usr}|NEVER|00:00|ACTIVE\n")
-                    f.seek(0); f.writelines(lines); f.truncate()
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                with open(LOCK_FILE, "a") as lock_f:
+                    fcntl.flock(lock_f, fcntl.LOCK_EX)
+                    with open(TROJAN_DB, 'r+') as f:
+                        lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
+                        lines.append(f"{usr}|NEVER|00:00|ACTIVE\n")
+                        f.seek(0); f.writelines(lines); f.truncate()
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
                 sync_xray()
             else:
-                with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                with open(DB_FILE, 'r+') as f:
-                    lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
-                    lines.append(f"{usr}|NEVER|00:00\n")
-                    f.seek(0); f.writelines(lines); f.truncate()
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                with open(LOCK_FILE, "a") as lock_f:
+                    fcntl.flock(lock_f, fcntl.LOCK_EX)
+                    with open(DB_FILE, 'r+') as f:
+                        lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
+                        lines.append(f"{usr}|NEVER|00:00\n")
+                        f.seek(0); f.writelines(lines); f.truncate()
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
                 subprocess.run(["usermod", "-U", usr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             q.edit_message_text(f"✅ <b>RENEWED & UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif d == 'del_ssh':
@@ -1078,21 +1084,23 @@ def btn(u, c):
             if usr:
                 if c.user_data.get('proto') == 'trj':
                     if os.path.exists(TROJAN_DB):
-                        with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                        with open(TROJAN_DB, 'r+') as f:
-                            lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
-                            f.seek(0); f.writelines(lines); f.truncate()
-                        fcntl.flock(lock_f, fcntl.LOCK_UN)
+                        with open(LOCK_FILE, "a") as lock_f:
+                            fcntl.flock(lock_f, fcntl.LOCK_EX)
+                            with open(TROJAN_DB, 'r+') as f:
+                                lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
+                                f.seek(0); f.writelines(lines); f.truncate()
+                            fcntl.flock(lock_f, fcntl.LOCK_UN)
                         sync_xray()
                 else:
                     kill_user(usr)
                     subprocess.run(["userdel", "-f", usr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
                     if os.path.exists(DB_FILE):
-                        with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                        with open(DB_FILE, 'r+') as f:
-                            lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
-                            f.seek(0); f.writelines(lines); f.truncate()
-                        fcntl.flock(lock_f, fcntl.LOCK_UN)
+                        with open(LOCK_FILE, "a") as lock_f:
+                            fcntl.flock(lock_f, fcntl.LOCK_EX)
+                            with open(DB_FILE, 'r+') as f:
+                                lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
+                                f.seek(0); f.writelines(lines); f.truncate()
+                            fcntl.flock(lock_f, fcntl.LOCK_UN)
                 q.edit_message_text(f"🗑️ <b>DELETED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif d == 'del_no':
             q.edit_message_text("❌ <b>Deletion Cancelled.</b>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
@@ -1105,17 +1113,18 @@ def btn(u, c):
         elif d.startswith('do_lock_'):
             usr = d.split('_', 2)[2]
             if c.user_data.get('proto') == 'trj':
-                with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                with open(TROJAN_DB, 'r+') as f:
-                    new_l = []
-                    for l in f.readlines():
-                        p = l.strip().split('|')
-                        if len(p) >= 3 and p[0] == usr:
-                            new_l.append(f"{p[0]}|{p[1]}|{p[2]}|LOCKED\n")
-                        else:
-                            new_l.append(l)
-                    f.seek(0); f.writelines(new_l); f.truncate()
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                with open(LOCK_FILE, "a") as lock_f:
+                    fcntl.flock(lock_f, fcntl.LOCK_EX)
+                    with open(TROJAN_DB, 'r+') as f:
+                        new_l = []
+                        for l in f.readlines():
+                            p = l.strip().split('|')
+                            if len(p) >= 3 and p[0] == usr:
+                                new_l.append(f"{p[0]}|{p[1]}|{p[2]}|LOCKED\n")
+                            else:
+                                new_l.append(l)
+                        f.seek(0); f.writelines(new_l); f.truncate()
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
                 sync_xray()
             else:
                 kill_user(usr)
@@ -1123,17 +1132,18 @@ def btn(u, c):
         elif d.startswith('do_unlock_'):
             usr = d.split('_', 2)[2]
             if c.user_data.get('proto') == 'trj':
-                with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                with open(TROJAN_DB, 'r+') as f:
-                    new_l = []
-                    for l in f.readlines():
-                        p = l.strip().split('|')
-                        if len(p) >= 3 and p[0] == usr:
-                            new_l.append(f"{p[0]}|{p[1]}|{p[2]}|ACTIVE\n")
-                        else:
-                            new_l.append(l)
-                    f.seek(0); f.writelines(new_l); f.truncate()
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                with open(LOCK_FILE, "a") as lock_f:
+                    fcntl.flock(lock_f, fcntl.LOCK_EX)
+                    with open(TROJAN_DB, 'r+') as f:
+                        new_l = []
+                        for l in f.readlines():
+                            p = l.strip().split('|')
+                            if len(p) >= 3 and p[0] == usr:
+                                new_l.append(f"{p[0]}|{p[1]}|{p[2]}|ACTIVE\n")
+                            else:
+                                new_l.append(l)
+                        f.seek(0); f.writelines(new_l); f.truncate()
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
                 sync_xray()
             else:
                 subprocess.run(["usermod", "-U", usr], stdout=subprocess.DEVNULL)
@@ -1295,18 +1305,22 @@ def txt(u, c):
                 d = "NEVER"; t = "00:00"
             if c.user_data.get('proto') == 'trj':
                 pwd = c.user_data['p']
-                with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                with open(TROJAN_DB, 'a') as f: f.write(f"{pwd}|{d}|{t}|ACTIVE\n")
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                with open(LOCK_FILE, "a") as lock_f:
+                    fcntl.flock(lock_f, fcntl.LOCK_EX)
+                    with open(TROJAN_DB, 'a') as f:
+                        f.write(f"{pwd}|{d}|{t}|ACTIVE\n")
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
                 sync_xray()
                 resp = f"<b>{TLINE}</b>\n <b>TROJAN CREATED</b> \n<b>{TLINE}</b>\n\n🔑 Password : <code>{pwd}</code>\n📅 Expiry : <code>{d}</code>\n⏰ Time : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy : <code>{pwd}</code>\n<b>{TLINE}</b>"
             else:
                 usr = c.user_data['u']; pwd = c.user_data['p']
                 subprocess.run(["useradd", "-M", "-s", "/bin/false", usr], stdout=subprocess.DEVNULL)
                 subprocess.run(["chpasswd"], input=f"{usr}:{pwd}".encode(), stdout=subprocess.DEVNULL)
-                with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                with open(DB_FILE, 'a') as f: f.write(f"{usr}|{d}|{t}\n")
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                with open(LOCK_FILE, "a") as lock_f:
+                    fcntl.flock(lock_f, fcntl.LOCK_EX)
+                    with open(DB_FILE, 'a') as f:
+                        f.write(f"{usr}|{d}|{t}\n")
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
                 resp = f"<b>{TLINE}</b>\n <b>SSH CREATED</b> \n<b>{TLINE}</b>\n\n👤 Username : <code>{usr}</code>\n🔑 Password : <code>{pwd}</code>\n📅 Expiry : <code>{d}</code>\n⏰ Time : <code>{t}</code>\n\n<b>{TLINE}</b>\n📋 Copy : <code>{usr}:{pwd}</code>\n<b>{TLINE}</b>"
             u.message.reply_text(resp, parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
             c.user_data.clear()
@@ -1318,20 +1332,22 @@ def txt(u, c):
             else:
                 d = "NEVER"; t = "23:59"
             if c.user_data.get('proto') == 'trj':
-                with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                with open(TROJAN_DB, 'r+') as f:
-                    lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
-                    lines.append(f"{usr}|{d}|{t}|ACTIVE\n")
-                    f.seek(0); f.writelines(lines); f.truncate()
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                with open(LOCK_FILE, "a") as lock_f:
+                    fcntl.flock(lock_f, fcntl.LOCK_EX)
+                    with open(TROJAN_DB, 'r+') as f:
+                        lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
+                        lines.append(f"{usr}|{d}|{t}|ACTIVE\n")
+                        f.seek(0); f.writelines(lines); f.truncate()
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
                 sync_xray()
             else:
-                with open(LOCK_FILE, "a") as lock_f: fcntl.flock(lock_f, fcntl.LOCK_EX)
-                with open(DB_FILE, 'r+') as f:
-                    lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
-                    lines.append(f"{usr}|{d}|{t}\n")
-                    f.seek(0); f.writelines(lines); f.truncate()
-                fcntl.flock(lock_f, fcntl.LOCK_UN)
+                with open(LOCK_FILE, "a") as lock_f:
+                    fcntl.flock(lock_f, fcntl.LOCK_EX)
+                    with open(DB_FILE, 'r+') as f:
+                        lines = [l for l in f.readlines() if not l.startswith(f"{usr}|")]
+                        lines.append(f"{usr}|{d}|{t}\n")
+                        f.seek(0); f.writelines(lines); f.truncate()
+                    fcntl.flock(lock_f, fcntl.LOCK_UN)
                 subprocess.run(["usermod", "-U", usr], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
             u.message.reply_text(f"✅ <b>RENEWED & UNLOCKED:</b> <code>{usr}</code>", parse_mode=ParseMode.HTML, reply_markup=get_back_btn())
         elif act == 'd1':
@@ -1408,7 +1424,7 @@ read -rp "PRESS ENTER TO RETURN TO WS-TUNNEL MENU..."
 function prepare_system_and_download() {
 echo -e "${YELLOW}🔄 UPDATING SYSTEM AND INSTALLING DEPENDENCIES${NC}"
 apt-get update -y > /dev/null 2>&1
-apt-get install curl unzip -y > /dev/null 2>&1
+apt-get install curl unzip psmisc -y > /dev/null 2>&1
 
 if [ ! -f "/usr/local/bin/WebSocket-VPN" ]; then
 echo -e "${YELLOW}⬇️ DOWNLOADING WEBSOCKET-VPN FROM GITHUB${NC}"
@@ -1432,7 +1448,14 @@ ws_port=${ws_port:-80}
 read -rp "⚙️ TARGET PORT [DEFAULT 22]: " ssh_port
 ssh_port=${ssh_port:-22}
 
-# [تعديل هاما]: فتح المنفذ المختار تلقائياً في جدار الحماية للعمل مع جميع المنافذ
+# Stop conflicting web servers if port 80 is selected and free the target port
+if [[ "$ws_port" == "80" ]]; then
+systemctl stop nginx apache2 2>/dev/null
+systemctl disable nginx apache2 2>/dev/null
+fi
+fuser -k "${ws_port}/tcp" >/dev/null 2>&1
+
+# Automatically open selected port in firewall for all tunnel apps
 ufw allow "$ws_port"/tcp >/dev/null 2>&1
 iptables -I INPUT -p tcp --dport "$ws_port" -j ACCEPT >/dev/null 2>&1
 
@@ -1447,7 +1470,7 @@ After=network.target ssh.service
 Type=simple
 User=root
 ExecStart=/usr/local/bin/WebSocket-VPN -listenAddr :$ws_port -targetAddr 127.0.0.1:$ssh_port
-Restart=on-failure
+Restart=always
 RestartSec=3
 
 [Install]
@@ -1480,7 +1503,14 @@ read -rp "⚙️ TARGET PORT [DEFAULT 2000]: " xray_port
 xray_port=${xray_port:-2000}
 listen_ip="127.0.0.1"
 
-# [تعديل هاما]: فتح المنفذ المختار تلقائياً في جدار الحماية للعمل مع جميع المنافذ
+# Stop conflicting web servers if port 80 is selected and free the target port
+if [[ "$ws_port" == "80" ]]; then
+systemctl stop nginx apache2 2>/dev/null
+systemctl disable nginx apache2 2>/dev/null
+fi
+fuser -k "${ws_port}/tcp" >/dev/null 2>&1
+
+# Automatically open selected port in firewall for all tunnel apps
 ufw allow "$ws_port"/tcp >/dev/null 2>&1
 iptables -I INPUT -p tcp --dport "$ws_port" -j ACCEPT >/dev/null 2>&1
 
@@ -1574,7 +1604,7 @@ After=network.target xray.service
 Type=simple
 User=root
 ExecStart=/usr/local/bin/WebSocket-VPN -listenAddr :$ws_port -targetAddr 127.0.0.1:$xray_port
-Restart=on-failure
+Restart=always
 RestartSec=3
 
 [Install]
