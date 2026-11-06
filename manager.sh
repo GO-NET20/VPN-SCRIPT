@@ -1590,7 +1590,7 @@ EOF
 
 sync_trojan_xray
 echo -e "${YELLOW}⚙️ CREATING SYSTEMD SERVICE FOR TROJAN-WS...${NC}"
-tee /usr/local/lib/systemd/system/trojan-ws.service 2>/dev/null || tee /etc/systemd/system/trojan-ws.service > /dev/null <<EOF
+tee /etc/systemd/system/trojan-ws.service > /dev/null <<EOF
 [Unit]
 Description=Trojan WebSocket Tunnel
 After=network.target xray.service
