@@ -1482,9 +1482,9 @@ systemctl enable ssh-ws > /dev/null 2>&1
 systemctl restart ssh-ws
 echo
 echo -e "${GREEN}✅ SSH WS INSTALLED SUCCESSFULLY!${NC}"
-echo -e "EXTERNAL PORT : ${CYAN}$ws_port${NC}"
-echo -e "TARGET PORT : ${CYAN}$ssh_port (SSH)${NC}"
-echo -e "SERVICE NAME : ${CYAN}SSH-WS${NC}"
+printf "EXTERNAL PORT      : ${CYAN}%s${NC}\n" "$ws_port"
+printf "TARGET PORT        : ${CYAN}%s (SSH)${NC}\n" "$ssh_port"
+printf "SERVICE NAME       : ${CYAN}SSH-WS${NC}\n"
 pause_menu
 }
 
@@ -1496,7 +1496,6 @@ echo -e "${L_BLUE}========================================${NC}"
 
 prepare_system_and_download
 echo
-read -rp "🔑 INITIAL TROJAN PASSWORD (OPTIONAL): " trojan_password
 read -rp "🌐 LISTEN PORT [DEFAULT 8080]: " ws_port
 ws_port=${ws_port:-8080}
 read -rp "⚙️ TARGET PORT [DEFAULT 2000]: " xray_port
@@ -1521,10 +1520,6 @@ systemctl stop xray > /dev/null 2>&1
 mkdir -p /usr/local/etc/xray /var/log/xray
 touch "$XRAY_ACCESS_LOG"
 chmod 666 "$XRAY_ACCESS_LOG"
-
-if [[ -n "$trojan_password" ]] && ! grep -q "^$trojan_password|" "$TROJAN_DB"; then
-( flock -x 200; echo "$trojan_password|NEVER|00:00|ACTIVE" >> "$TROJAN_DB" ) 200>"$DB_LOCK"
-fi
 
 echo -e "${YELLOW}⚙️ CONFIGURING XRAY...${NC}"
 tee "$XRAY_CONF" > /dev/null <<EOF
@@ -1595,7 +1590,7 @@ EOF
 
 sync_trojan_xray
 echo -e "${YELLOW}⚙️ CREATING SYSTEMD SERVICE FOR TROJAN-WS...${NC}"
-tee /etc/systemd/system/trojan-ws.service > /dev/null <<EOF
+tee /usr/local/lib/systemd/system/trojan-ws.service 2>/dev/null || tee /etc/systemd/system/trojan-ws.service > /dev/null <<EOF
 [Unit]
 Description=Trojan WebSocket Tunnel
 After=network.target xray.service
@@ -1618,10 +1613,9 @@ systemctl enable trojan-ws > /dev/null 2>&1
 systemctl restart trojan-ws
 echo
 echo -e "${GREEN}✅ TROJAN WS INSTALLED SUCCESSFULLY!${NC}"
-echo -e "EXTERNAL PORT : ${CYAN}$ws_port${NC}"
-echo -e "XRAY LOCAL PORT : ${CYAN}$xray_port${NC}"
-[[ -n "$trojan_password" ]] && echo -e "TROJAN PASSWORD : ${CYAN}$trojan_password (Saved in Manager DB)${NC}"
-echo -e "SERVICE NAMES : ${CYAN}XRAY, TROJAN-WS${NC}"
+printf "EXTERNAL PORT      : ${CYAN}%s${NC}\n" "$ws_port"
+printf "XRAY LOCAL PORT    : ${CYAN}%s${NC}\n" "$xray_port"
+printf "SERVICE NAMES      : ${CYAN}XRAY, TROJAN-WS${NC}\n"
 pause_menu
 }
 
