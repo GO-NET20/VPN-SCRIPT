@@ -1654,11 +1654,10 @@ EOF
     systemctl restart ssh-ws
 
     echo
-echo -e "${GREEN}✅ SSH WS INSTALLED SUCCESSFULLY!${NC}"
-printf "EXTERNAL PORT      : ${CYAN}%s${NC}\n" "$ws_port"
-printf "TARGET PORT        : ${CYAN}%s (SSH)${NC}\n" "$ssh_port"
-printf "SERVICE NAME       : ${CYAN}SSH-WS${NC}\n"
-    
+    echo -e "${GREEN}✅ SSH WS INSTALLED SUCCESSFULLY!${NC}"
+    printf "EXTERNAL PORT      : ${CYAN}%s${NC}\n" "$ws_port"
+    printf "TARGET PORT        : ${CYAN}%s (SSH)${NC}\n" "$ssh_port"
+    printf "SERVICE NAME       : ${CYAN}SSH-WS${NC}\n"
     pause_menu
 }
 
@@ -1790,12 +1789,11 @@ EOF
     systemctl restart trojan-ws
 
     echo
-echo -e "${GREEN}✅ TROJAN WS INSTALLED SUCCESSFULLY!${NC}"
-printf "EXTERNAL PORT      : ${CYAN}%s${NC}\n" "$ws_port"
-printf "XRAY LOCAL PORT    : ${CYAN}%s${NC}\n" "$xray_port"
-printf "SERVICE NAMES      : ${CYAN}XRAY • TROJAN-WS${NC}\n"
-[[ -n "$trojan_password" ]] && printf "TROJAN PASSWORD    : ${CYAN}%s [ Saved ]${NC}\n" "$trojan_password"
-    
+    echo -e "${GREEN}✅ TROJAN WS INSTALLED SUCCESSFULLY!${NC}"
+    printf "EXTERNAL PORT      : ${CYAN}%s${NC}\n" "$ws_port"
+    printf "XRAY LOCAL PORT    : ${CYAN}%s${NC}\n" "$xray_port"
+    printf "SERVICE NAMES      : ${CYAN}XRAY • TROJAN-WS${NC}\n"
+    [[ -n "$trojan_password" ]] && printf "TROJAN PASSWORD    : ${CYAN}%s [ Saved ]${NC}\n" "$trojan_password"
     pause_menu
 }
 
