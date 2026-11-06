@@ -1448,12 +1448,11 @@ ws_port=${ws_port:-80}
 read -rp "⚙️ TARGET PORT [DEFAULT 22]: " ssh_port
 ssh_port=${ssh_port:-22}
 
-# Stop conflicting web servers if port 80 is selected and free the target port
-if [[ "$ws_port" == "80" ]]; then
-systemctl stop nginx apache2 2>/dev/null
-systemctl disable nginx apache2 2>/dev/null
-fi
-fuser -k "${ws_port}/tcp" >/dev/null 2>&1
+# Don't touch web servers even if port 80 is selected
+# if [[ "$ws_port" == "80" ]]; then
+# systemctl stop nginx apache2 2>/dev/null
+# systemctl disable nginx apache2 2>/dev/null
+# fi fuser -k "${ws_port}/tcp" >/dev/null 2>&1
 
 # Automatically open selected port in firewall for all tunnel apps
 ufw allow "$ws_port"/tcp >/dev/null 2>&1
