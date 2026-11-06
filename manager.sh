@@ -903,7 +903,7 @@ while true; do
     echo -e "  ${BLUE}[04] ⛔ LOCK ACCOUNT${NC}"
     echo -e "  ${BLUE}[05] 📋 LIST ACCOUNTS${NC}"
     echo -e "  ${BLUE}[06] 🔍 SEARCH ACCOUNT${NC}"
-    echo -e "  ${BLUE}[07] 👁 MONITOR ACCOUNT${NC}"
+    echo -e "  ${BLUE}[07] 🧿 MONITOR ACCOUNT${NC}"
     echo -e "  ${BLUE}[08] 💾 BACKUP DATA${NC}"
     echo -e "  ${BLUE}[09] 🔔 EXPIRED ACCOUNTS${NC}"
     echo -e "  ${BLUE}[10] ⚙️ SETTINGS${NC}"
