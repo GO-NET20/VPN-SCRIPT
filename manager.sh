@@ -726,7 +726,7 @@ echo -e " ${BLUE}🔑 Password :${NC} ${WHITE}$p${NC}"
 echo -e " ${BLUE}📊 Status :${NC} $LOCK_STAT"
 echo -e " ${BLUE}📅 Expiry :${NC} ${WHITE}$DATE_STR${NC}"
 echo -e "${LINE}"
-done <<< "$trj_results"
+done < <(echo "$trj_results")
 fi
 fi
 pause
