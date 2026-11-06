@@ -714,7 +714,7 @@ echo -e " ${BLUE}📊 Status :${NC} $LOCK_STAT"
 echo -e " ${BLUE}📅 Expiry :${NC} ${WHITE}$DATE_STR${NC}"
 echo -e "${LINE}"
 fi
-done <<< "$ssh_results"
+done < <(echo "$ssh_results")
 fi
 if [[ -n "$trj_results" ]]; then
 while IFS='|' read -r p d t st rest; do
