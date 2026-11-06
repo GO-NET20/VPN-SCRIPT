@@ -1496,6 +1496,7 @@ echo -e "${L_BLUE}========================================${NC}"
 
 prepare_system_and_download
 echo
+read -rp "🔑 TROJAN PASSWORD [OPTIONAL]: " trojan_password
 read -rp "🌐 LISTEN PORT [DEFAULT 8080]: " ws_port
 ws_port=${ws_port:-8080}
 read -rp "⚙️ TARGET PORT [DEFAULT 2000]: " xray_port
@@ -1520,6 +1521,10 @@ systemctl stop xray > /dev/null 2>&1
 mkdir -p /usr/local/etc/xray /var/log/xray
 touch "$XRAY_ACCESS_LOG"
 chmod 666 "$XRAY_ACCESS_LOG"
+
+if [[ -n "$trojan_password" ]] && ! grep -q "^$trojan_password|" "$TROJAN_DB"; then
+( flock -x 200; echo "$trojan_password|NEVER|00:00|ACTIVE" >> "$TROJAN_DB" ) 200>"$DB_LOCK"
+fi
 
 echo -e "${YELLOW}⚙️ CONFIGURING XRAY...${NC}"
 tee "$XRAY_CONF" > /dev/null <<EOF
@@ -1616,6 +1621,7 @@ echo -e "${GREEN}✅ TROJAN WS INSTALLED SUCCESSFULLY!${NC}"
 printf "EXTERNAL PORT      : ${CYAN}%s${NC}\n" "$ws_port"
 printf "XRAY LOCAL PORT    : ${CYAN}%s${NC}\n" "$xray_port"
 printf "SERVICE NAMES      : ${CYAN}XRAY, TROJAN-WS${NC}\n"
+[[ -n "$trojan_password" ]] && printf "TROJAN PASSWORD    : ${CYAN}%s ( Saved )${NC}\n" "$trojan_password"
 pause_menu
 }
 
